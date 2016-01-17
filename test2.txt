@@ -1,0 +1,43 @@
+((((((x[1234].fish("fork")[1].nope[(((((((((("asdf"))))))))))])))))) = ((2 + 3) * (8 + 2)) >> 2
+
+let m = {
+  begin: "hello",
+  end: "world"
+};
+
+add x : Int, y : Int {
+  return x + y
+}
+
+add x, y {
+  return x + y
+}
+
+Person name: String {
+  return {
+    name: name,
+    speak: fn self {
+      print(self.name)
+    }
+  }
+}
+
+Person name -> {
+  name: name,
+  speak: fn self -> print(self.name)
+}
+
+let bob = Person("bob")
+
+bob.speak(bob)
+
+bob::speak()
+
+add x: Int, y: Int -> x + y
+
+add x, y {
+  return x + y
+}
+
+bob.speak(bob)
+bob::speak()
