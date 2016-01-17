@@ -1,0 +1,14 @@
+if 1 {
+  if 0 {
+    let x = ((((((((9 * 1000))))))) + (8 * 10))/2
+  } else if 1 {
+    let x = 2
+    let u = 5 + x
+  }
+} else {
+  if 0 {
+    let x = "hello " .. "world"
+  } else {
+    let x = 2
+  } 
+}

@@ -1,0 +1,134 @@
+types: String, Char, Bool, Int, Float, Map, Array
+binop: | - \ + * ^ / % >> << > < == or and .. &
+unop: ! ~ 
+reserved symbols: { } [ ] : = ( ) ; , " ' -- ::
+reserved words: let if else return while lambda true false nil
+
+GRAMMER - BNF
+
+exp ::= Number | String | true | false | nil | unop exp | exp binop exp | functiondef |
+        `(` exp `)` | mapconstructor | arrayconstructor | var
+
+var ::= `(` var `)` | Name varsuffix
+
+varsuffix ::= `.` Name varsuffix | `[` exp `]` varsuffix | functioncallsuffix varsuffix | nil
+
+functiondef ::= lambda functionbody
+
+functionbody ::= namelist `{` block `}` | namelist `->` exp
+
+namelist ::= Name typedef | Name | Name `,` namelist | Name typedef `,` namelist
+
+typedef ::= `:` Type | Null
+
+functioncall ::= value functioncallsuffix 
+
+functioncallsuffix ::= `(` explist `)` | `::` Name `(` explist `)`
+
+explist ::= exp | exp `,` explist
+
+ifexp ::= `if` exp { block } elseexp
+
+elseexp ::= `else` { block } | `else` ifexp | Null
+
+whileexp ::= while exp { block }
+
+stmt ::= ifexp | whileexp | `let` Name | break | return exp | Name functionbody | `let` Name `=` exp | var `=` exp | var
+
+stmtlist ::= stmt `;` | stmt `;` stmtlist
+
+block ::= stmtlist | { block }
+
+mapconstructor ::= `{` pairlist `}`
+
+pair ::= Name `:` exp 
+
+pairlist ::= pair | pair `,` pairlist
+
+arrayconstructor ::= `[` explist `]`
+
+start ::= block
+
+EXAMPLES
+
+let m = {
+  begin: "hello",
+  end: "world"
+};
+
+add x : Int, y : Int {
+  return x + y;
+}
+
+add x, y {
+  return x + y
+}
+
+
+
+-- OO example (with type safety)
+
+Person name: String {
+  return {
+    name: name,
+    speak: lambda self {
+      print(self.name);
+    }
+  }
+}
+
+-- sugar for the above
+-- remember, arrow syntax allows for single expression
+-- functions (where the result is implicitly returned)
+
+Person name -> {
+  name: name,
+  speak: fn self -> print(self.name)
+}
+
+let bob = Person("bob");
+
+bob.speak(bob);
+
+-- sugar for the above
+-- calling the function on a map
+
+bob::speak();
+
+-- single expression functions
+-- expression is returned
+
+add x: Int, y: Int -> x + y
+
+add x, y {
+  if y == 0 {
+    return x;
+  }
+
+  return x + y;
+}
+
+noarg {
+  return "No argument function";
+}
+
+not x {
+  return ~x;
+}
+
+lambda x {
+  return "anonymous function with " .. x
+}
+
+let f = lambda x {
+  -- an anonymous function
+}
+
+run(fn {
+  -- do stuff
+});
+
+
+
+
+
