@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #include "parse.h"
+#include "util.h"
 
 #define abortonerror(x) do { if( x->err ) return; } while(0)
 #define emit(s, o, v) vm_ins(&(s->vm), o, (unsigned long)v);
@@ -81,7 +82,7 @@ void varsuffix( struct __state* s ){
   }
   if( accept(s, period_tok) ){
     if( peek(s, name_tok) ){
-      char* n = (char *)strdup((const char*)s->tok.as_name);
+      unsigned char* n = strclone(s->tok.as_name);
       emit(s, OP_OACCESS, n);
     }
     expect(s, name_tok);
@@ -141,7 +142,7 @@ void functionbody( struct __state* s ){
 void namelist( struct __state* s ){
   abortonerror(s);
   if( peek(s, name_tok) ){
-    char* n = (char *)strdup((const char *)s->tok.as_name);
+    unsigned char* n = strclone(s->tok.as_name);
     emit(s, OP_STORE, n);
     next(s);
     typeexp(s);
@@ -174,7 +175,7 @@ void functioncallsuffix( struct __state* s ){
   /* get last computed value here */
   expect(s, doublecolon_tok);
   if( peek(s, name_tok) ){
-    char* n = (char *)strdup((const char*)s->tok.as_name);
+    unsigned char* n = strclone(s->tok.as_name);
     emit(s, OP_OACCESS, n);
     next(s);
   } else {
@@ -214,7 +215,7 @@ void expr( struct __state* s ){
   }
 
   if( peek(s, string_tok) ){
-    char* str = (char *)strdup((const char *)s->tok.as_string);
+    unsigned char* str = strclone(s->tok.as_string);
     next(s);
     emit(s, OP_PUSHSTR, str);
     goto check_binop;
@@ -362,9 +363,9 @@ void map( struct __state* s ){
 }
 
 void pair( struct __state* s ){
-  char* n;
+  unsigned char* n;
   abortonerror(s);
-  n = (char *)strdup((const char *)s->tok.as_name);
+  n = strclone(s->tok.as_name);
   expect(s, name_tok);
   expect(s, colon_tok);
   expr(s);
@@ -396,7 +397,7 @@ void variable( struct __state* s ){
     return;
   }
   if( peek(s, name_tok) ){
-    char* n = (char *)strdup((const char *)s->tok.as_name);
+    unsigned char* n = strclone(s->tok.as_name);
     emit(s, OP_PUSHVAL, n);
     next(s);
     varsuffix(s);
@@ -427,7 +428,7 @@ void stmt( struct __state* s ){
     }
     accept(s, semicolon_tok);
   } else if( accept(s, let_tok) ){
-    char* n = (char *)strdup((const char *)s->tok.as_name);
+    unsigned char* n = strclone(s->tok.as_name);
     expect(s, name_tok);
     if( accept(s, assign_tok) ){
       expr(s);
@@ -442,8 +443,8 @@ void stmt( struct __state* s ){
 
 void stmtexpr( struct __state* s ){
   if( peek(s, name_tok) ){
-    char* n;
-    n = (char *)strdup((const char *)s->tok.as_name);
+    unsigned char* n;
+    n = strclone(s->tok.as_name);
     next(s);
     if( 
       (peek(s, name_tok) || peek(s, lbrace_tok) || peek(s, arrow_tok)) &&

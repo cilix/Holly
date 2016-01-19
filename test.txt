@@ -4,6 +4,7 @@ if 1 {
   } else if 1 {
     let x = 2
     let u = 5 + x
+    let s = "hello " .. "world"
   }
 } else {
   if 0 {

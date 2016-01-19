@@ -3,6 +3,7 @@
 #include <stdlib.h>
 
 #include "vm.h"
+#include "util.h"
 
 static const char* op_debug[] = {
   "NOOP",
@@ -145,7 +146,8 @@ void vm_run( struct __vm* v ){
   int i = 0, 
       op = 0, 
       err = 0,
-      iff = 0; /* if has failed */
+      iff = 0; /* 'if' check has failed */
+
   unsigned long d;
   v->s = 100;
   for( ; i < v->ct; i++ ){
@@ -181,7 +183,9 @@ void vm_run( struct __vm* v ){
         break;
       case OP_STORE: {
         word_t o = getval(pop(v));
-        hashset(v->sym, (Byte_t *)d, strlen(d), o);
+        hashset(v->sym, (Byte_t *)d, strlen((const char *)d), o);
+        printf("Stored %lu in %s\n", o, (Byte_t *)d);
+        vm_print(v, v->sct);
       } break;
       case OP_BIF: {
         word_t o = getval(pop(v)), x;
@@ -318,19 +322,19 @@ void vm_run( struct __vm* v ){
         int rt = gettype(r);
         int lt = gettype(l);
         int len = 0;
-        char *s, *ls, *rs;
+        unsigned char *s, *ls, *rs;
         if( lt != rt || rt != T_STR ){
           err = 1;      
           puts("Error: can only concatenate strings");
           break;
         }
-        ls = (char *)strdup((const char *)getval(l));
-        rs = (char *)strdup((const char *)getval(r));
-        len = strlen(ls) + strlen(rs);
+        ls = strclone((Byte_t *)getval(l));
+        rs = strclone((Byte_t *)getval(r));
+        len = strlen((const char *)ls) + strlen((const char *)rs);
         s = malloc(len + 1);
         s[len] = 0;
-        strcpy(s, ls);
-        strcat(s, rs);
+        strcpy((char *)s, (const char *)ls);
+        strcat((char *)s, (const char *)rs);
         push(v, (word_t)s, T_STR);
       } break;
       case OP_NOT: 
