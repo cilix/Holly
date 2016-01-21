@@ -349,7 +349,7 @@ void whilestmt( struct __state* s ){
   emit(s, OP_BWHILE, 0);
   expr(s);
   expect(s, lbrace_tok);
-  emit(s, OP_BWHILE, 0);
+  emit(s, OP_IFTRUE, 0);
   block(s);
   emit(s, OP_EWHILE, 0);
   expect(s, rbrace_tok);
@@ -423,6 +423,7 @@ void stmt( struct __state* s ){
   } else if( peek(s, lparen_tok) ){
     variable(s);
     if( accept(s, assign_tok) ){
+      emit(s, OP_LHAND, 0);
       expr(s); 
       emit(s, OP_REPVAL, 0);
     }
@@ -458,6 +459,7 @@ void stmtexpr( struct __state* s ){
     emit(s, OP_PUSHVAL, n);
     varsuffix(s);
     if( accept(s, assign_tok) ){
+      emit(s, OP_LHAND, 0);
       expr(s); 
       emit(s, OP_REPVAL, 0);
     }

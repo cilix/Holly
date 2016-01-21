@@ -13,3 +13,10 @@ if 1 {
     let x = 2
   } 
 }
+
+x = 10
+
+while x > 2 {
+  let y = 4
+  x = x - 1
+}

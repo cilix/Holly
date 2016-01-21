@@ -74,7 +74,8 @@ enum op {
   OP_NOT,
   OP_LNOT,
   OP_NEG,
-  OP_CNCT
+  OP_CNCT,
+  OP_LHAND
 };
 
 void vm_ins( struct __vm*, enum op, unsigned long );

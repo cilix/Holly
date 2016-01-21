@@ -62,7 +62,8 @@ static const char* op_debug[] = {
   "OP_NOT",
   "OP_LNOT",
   "OP_NEG",
-  "OP_CNCT"
+  "OP_CNCT",
+  "OP_LHAND"
 };
 
 #define T_INT  0x1
@@ -146,9 +147,12 @@ void vm_run( struct __vm* v ){
   int i = 0, 
       op = 0, 
       err = 0,
-      iff = 0; /* 'if' check has failed */
+      iff = 0, /* 'if' check has failed */
+      wi = -1; /* while loop expr imdex */
+      
+  int loops = 0;
 
-  unsigned long d;
+  unsigned long d, lh = 0, lcv = 0; /* pointer to last computed value */
   v->s = 100;
   for( ; i < v->ct; i++ ){
     word_t x = v->ins[i];
@@ -166,20 +170,26 @@ void vm_run( struct __vm* v ){
         break;
       case OP_PUSHLVAL:
         break;
+      case OP_LHAND:
+        lh = lcv;
+        break;
       case OP_PUSHVAL: {
         int dl = strlen((const char *)d);
         int hv = hashfind(v->sym, (Byte_t *)d, dl, 0);
-        word_t o = hashget(v->sym, (Byte_t *)d, dl);
+        word_t o;
         if( hv == -1 ) {
           err = 1; 
           printf("Unknown variable %s\n", (char *)d); 
           break; 
         }
+        lcv = hv;
+        o = v->sym->t[hv].v;
         push(v, o, T_INT);
       } break;
       case OP_PUSHNIL: 
         break;
       case OP_REPVAL: 
+        v->sym->t[lh].v = getval(pop(v));
         break;
       case OP_STORE: {
         word_t o = getval(pop(v));
@@ -219,9 +229,11 @@ void vm_run( struct __vm* v ){
         }
         iff = 0;
       } break;
-      case OP_BWHILE: 
+      case OP_BWHILE:
+        wi = i;
         break;
-      case OP_EWHILE: 
+      case OP_EWHILE:
+        i = wi;
         break;
       case OP_PUSHSTR: 
         push(v, (word_t)d, T_STR);
@@ -266,8 +278,25 @@ void vm_run( struct __vm* v ){
         break; 
       case OP_EFNDEF: 
         break;
-      case OP_IFTRUE: 
-        break; 
+      case OP_IFTRUE: {
+        word_t a = getval(pop(v)), x;
+        int co = op, ct = -1;
+        if( a ){
+          loops++;
+          break;
+        }
+        while( i < v->ct ) {
+          x = v->ins[++i];
+          co = x >> 58;
+          if( co == OP_BWHILE ) ct--;
+          if( co == OP_EWHILE ) ct++;
+          if( !ct ){
+            printf("loop count %d\n", loops);
+            i++;
+            break;
+          }
+        }
+      } break; 
       case OP_LOR: 
         binop(l | r);
         break;
