@@ -14,9 +14,11 @@ if 1 {
   } 
 }
 
-x = 10
-
-while x > 2 {
-  let y = 4
-  x = x - 1
+dosomething x {
+  while x > 2 {
+    let y = 4
+    x = x - 1
+  }
 }
+
+dosomething(10)

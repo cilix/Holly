@@ -151,7 +151,10 @@ void hashset( struct __ht* h, Byte_t* k, int l, Word_t v ){
     hashnodeinit(n, k, l, v, hv != hv0);
     return;
   }
-  if( hashmatch(n, k, l) ) return;
+  if( hashmatch(n, k, l) ){
+    n->v = v;
+    return;
+  }
   f = 0;
   while( isoccupied(n->f) ){
     n0 = hashnodeclone(n); /* evict */

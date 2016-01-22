@@ -88,6 +88,7 @@ static const char* op_debug[] = {
   }                        \
   r = getval(r);           \
   l = getval(l);           \
+  printf("left: %d right: %d\n", (int)l, (int)r); \
   push(v, (word_t)(op), (word_t)tr); \
 } while( 0 )
 
@@ -97,6 +98,7 @@ void vm_init( struct __vm* v ){
   v->stack = malloc(sizeof(word_t) * 100);
   v->ct = v->sct = 0;
   v->sym = hashinit();
+  v->fns = hashinit();
   memset(v->ins, 0, 100);
   memset(v->stack, 0, 100);
 }
@@ -147,8 +149,10 @@ void vm_run( struct __vm* v ){
   int i = 0, 
       op = 0, 
       err = 0,
+      fidx = 0,
+      rexec = 0, /* resume execution */
       iff = 0, /* 'if' check has failed */
-      wi = -1; /* while loop expr imdex */
+      wi = -1; /* while loop expr index */
       
   int loops = 0;
 
@@ -261,8 +265,11 @@ void vm_run( struct __vm* v ){
       case OP_EEXP: 
         break;
       case OP_BFCALL: 
+        fidx = (int)getval(pop(v));
         break;
-      case OP_EFCALL: 
+      case OP_EFCALL:
+        rexec = i;
+        i = fidx;
         break;
       case OP_OACCESS: 
         break;
@@ -270,9 +277,17 @@ void vm_run( struct __vm* v ){
         break; 
       case OP_EGACCESS: 
         break;
-      case OP_BFDEF: 
-        break; 
+      case OP_BFDEF: {
+        word_t co, x;
+        hashset(v->sym, (Byte_t *)d, strlen((const char *)d), i);
+        while( i < v->ct ) {
+          x = v->ins[++i];
+          co = x >> 58;
+          if( co == OP_EFDEF ) break;
+        }
+      } break; 
       case OP_EFDEF: 
+        i = rexec;
         break;
       case OP_BFNDEF: 
         break; 

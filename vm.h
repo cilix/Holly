@@ -12,6 +12,7 @@ struct __vm {
   word_t*    ins;
   word_t*    stack;
   HashTable* sym;
+  HashTable* fns;
   int        ct;
   int        sct;
   int        s;
