@@ -77,13 +77,13 @@ whilestatement ::=
   `while` `:` statement
   
 forstatement ::=
-  `for` Name { `,` Name } `in` iterable block |         
-  `for` Name { `,` Name } `in` iterable `:` statement 
+  `for` Name [ `,` Name ] `in` iterable block |         
+  `for` Name [ `,` Name ] `in` iterable `:` statement 
   
 iterable ::=
   spread |
-  object |
-  array |
+  Object |
+  Array |
   String
   
 spread ::=
@@ -106,11 +106,13 @@ statement ::=
   `return` expression |
   `break` |
   `let` Name `=` expression |
+  fn Name namelist block |
+  fn Name namelist `->` expression |
   value `=` expression |        *value must not be a functioncall
   value                         *value must be a functioncall
   
 statementlist ::=
-  statement { `;` } statementlist | *semicolon is optional
+  statement [ `;` ] statementlist | *semicolon is optional
   nil
   
 start ::=
