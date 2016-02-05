@@ -1,6 +1,6 @@
 The Holly Programming Language
 
-types: String, Int, Float, Object, Array
+types: String, Number, Object, Array, Boolean
 binary operators: | - + * ^ / % >> << & == !=
 compound: |= -= += *= ^= /= %= >>= <<= &= 
 unary operator: ! ~ 
@@ -11,8 +11,7 @@ other reserved words: let if else return while fn true false nil for in
 GRAMMER - BNF
 
 literal ::=
-  Integer |
-  Float |
+  Number |
   Boolean |
   Nil     
 
