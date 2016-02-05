@@ -45,7 +45,7 @@ int main( int argc, char** argv ){
   
   vm_init(&(state.vm));
   start(&state);
-  vm_run(&(state.vm));
+  /*vm_run(&(state.vm));*/
   free(p);
   
   return 0;

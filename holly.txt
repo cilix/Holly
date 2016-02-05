@@ -1,0 +1,117 @@
+The Holly Programming Language
+
+types: String, Int, Float, Object, Array
+binary operators: | - + * ^ / % >> << & == !=
+compound: |= -= += *= ^= /= %= >>= <<= &= 
+unary operator: ! ~ 
+comparison: < > == <= >= and or
+reserved symbols: \ { } [ ] : = ( ) ; , " ' -- :: ..
+other reserved words: let if else return while fn true false nil for in
+
+GRAMMER - BNF
+
+literal ::=
+  Integer |
+  Float |
+  Boolean |
+  Nil     
+
+expression ::=
+  literal |
+  value |
+  unop expression |
+  expression binop expression |
+  `(` expression `)` 
+  
+value ::=
+  `(` value `)` valueend |
+  object valueend |
+  array valueend |
+  Name valueend |
+  lambda valueend
+  
+valueend ::=
+  `.` Name valueend |
+  `[` expressions `]` valueend |
+  functioncallend valueend |
+  nil
+
+block ::=
+  `{` statementlist `}`
+
+lambda ::=
+  `fn` namelist block | 
+  `fn` namelist `->` expression 
+  
+functioncallend ::=
+  `(` expressionlist `)`
+  
+expressionlist ::=
+  expression |
+  expression `,` expressionlist |
+  nil
+  
+namelist ::=
+  name |
+  name `,` namelist |
+  nil
+  
+name ::= 
+  Name |
+  Name typehint
+  
+typehint ::=
+  `:` Type
+  
+ifstatement ::=
+  `if` expression block elsestatement |
+  `if` expression `:` statement elsestatement 
+  
+elsestatement ::=
+  `else` block |
+  `else` `:` statement |
+  `else` ifstatement
+  
+whilestatement ::=
+  `while` block |
+  `while` `:` statement
+  
+forstatement ::=
+  `for` Name { `,` Name } `in` iterable block |         
+  `for` Name { `,` Name } `in` iterable `:` statement 
+  
+iterable ::=
+  spread |
+  object |
+  array |
+  String
+  
+spread ::=
+  Number `..` Number  
+
+object ::=
+  `{` pairlist `}`
+  
+array ::=
+  `[` expressionlist `]`
+  
+pairlist ::=
+  Name `:` expression |
+  Name `:` expression `,` pairlist |
+  nil
+  
+statement ::=
+  ifstatement |
+  whilestatement |
+  `return` expression |
+  `break` |
+  `let` Name `=` expression |
+  value `=` expression |        *value must not be a functioncall
+  value                         *value must be a functioncall
+  
+statementlist ::=
+  statement { `;` } statementlist | *semicolon is optional
+  nil
+  
+start ::=
+  statementlist

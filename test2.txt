@@ -41,3 +41,5 @@ add x, y {
 
 bob.speak(bob)
 bob::speak()
+
+let y = { hello: "world" }

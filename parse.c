@@ -391,6 +391,11 @@ void array( struct __state* s ){
 
 void variable( struct __state* s ){
   abortonerror(s);
+  /* TODO
+   * [1, 2, 3][0] and { hello: "world" }.hello is unsupported
+   * possible solution:
+   * var ::= Name varsuffix | exp varsuffix
+   */
   if( accept(s, lparen_tok) ){
     variable(s);
     expect(s, rparen_tok);
@@ -465,6 +470,7 @@ void stmtexpr( struct __state* s ){
     }
     accept(s, semicolon_tok);
   } else {
+    /* expr(s) ? */
     error(s, "unexpected symbol", tokstr[s->tok.type]);
   }
 }
