@@ -24,16 +24,16 @@ expression ::=
   `(` expression `)` 
   
 value ::=
-  `(` value `)` valueend |
-  object valueend |
-  array valueend |
-  Name valueend |
-  lambda valueend
+  `(` value `)` access |
+  object access |
+  array access |
+  Name access |
+  lambda access
   
-valueend ::=
-  `.` Name valueend |
-  `[` expressions `]` valueend |
-  functioncallend valueend |
+access ::=
+  `.` Name access |
+  `[` expressions `]` access |
+  functioncallend access |
   nil
 
 block ::=
@@ -70,7 +70,8 @@ ifstatement ::=
 elsestatement ::=
   `else` block |
   `else` `:` statement |
-  `else` ifstatement
+  `else` ifstatement |
+  nil
   
 whilestatement ::=
   `while` block |
@@ -117,3 +118,43 @@ statementlist ::=
   
 start ::=
   statementlist
+
+
+  
+POSSIBLE GRAMMAR AMBIGUITIES
+
+1. Function call issues
+
+fn fname {
+ -- stuff
+}
+
+and
+
+fn x {
+ -- stuff with x
+}()
+
+These are both valid statements. The second is the direct calling of an
+anonymous function, the first is a function declaration. We'd have no
+way of knowing which was which until the function call. A possible solution
+is to have all value references wrapped in parenthesis. But that would make all
+function calling awkward: (something)(), (object.name[0])()
+Another possible solution is to get rid of function declarations all together, since
+they are just sugar for assigning anonymous functions to variables.
+
+2. Lack of semicolon issues
+
+if x > 2 : return
+
+something()
+
+There's no way of knowing whether or not we're supposed to return
+the result of the function call. A possible solution is to require that
+return returns a value (like nil).  
+
+
+OTHER RANDOM NOTES
+
+I will probably get rid of integers at least for the first version. IEEE-754
+floating point numbers are far simpler to deal with.
