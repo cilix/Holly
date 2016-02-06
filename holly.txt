@@ -166,7 +166,7 @@ floating point numbers are far simpler to deal with.
 
 CODE SAMPLES
 
-fn Person name, age {
+let Person = fn name, age {
   return { 
     name: name,
     age: age,
@@ -177,7 +177,7 @@ fn Person name, age {
 }
 
 -- or, sugar for functions returning a single expression
-fn Person name, age -> 
+let Person = fn name, age -> 
   { name: name, age: age, 
     speak: fn self -> 
       print('hello, my name is ' + self.name) }
@@ -189,7 +189,7 @@ bob.speak(bob)
 -- or, sugar for implicitly passing the object as the first value
 bob::speak()
 
-fn add x, y -> x + y
+let add = fn x, y -> x + y
 
 let a = add(2, 3)
 
