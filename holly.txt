@@ -1,14 +1,46 @@
 The Holly Programming Language
 
 types: String, Number, Object, Array, Boolean
-binary operators: | - + * ^ / % >> << & == !=
+binary operators: | - + * ^ / % >> << & 
 compound: |= -= += *= ^= /= %= >>= <<= &= 
-unary operator: ! ~ 
-comparison: < > == <= >= and or
+unary operator: ! ~ * -
+comparison: < > == != <= >= and or
 reserved symbols: \ { } [ ] : = ( ) ; , " ' -- :: ..
 other reserved words: let if else return while fn true false nil for in
 
 GRAMMER - BNF
+
+comparison ::=
+  LessThan |
+  GreaterThan |
+  EqualTo |
+  NotEqualTo |
+  LessThanOrEqualTo |
+  GreaterThanOrEqualTo |
+  And |
+  Or
+ 
+arithmetic ::=
+  LogicalOr |
+  Subtract |
+  Add |
+  Multiply |
+  Xor |
+  Divide |
+  Mod |
+  RightShift |
+  LeftShift |
+  LogicalAnd
+
+binop ::=
+  arithmetic |
+  comparison
+
+unop ::=
+  BooleanNot |
+  LogicalNot |
+  WeakRef |
+  Negate 
 
 literal ::=
   Number |
@@ -23,7 +55,6 @@ expression ::=
   `(` expression `)` 
   
 value ::=
-  `(` value `)` access |
   object access |
   array access |
   Name access |
@@ -63,18 +94,15 @@ typehint ::=
   `:` Type
   
 ifstatement ::=
-  `if` expression block elsestatement |
-  `if` expression `:` statement elsestatement 
+  `if` expression block elsestatement 
   
 elsestatement ::=
   `else` block |
-  `else` `:` statement |
   `else` ifstatement |
   nil
   
 whilestatement ::=
-  `while` block |
-  `while` `:` statement
+  `while` expression block 
   
 forstatement ::=
   `for` Name [ `,` Name ] `in` iterable block |         
@@ -106,8 +134,6 @@ statement ::=
   `return` expression |
   `break` |
   `let` Name `=` expression |
-  fn Name namelist block |
-  fn Name namelist `->` expression |
   value `=` expression |        *value must not be a functioncall
   value                         *value must be a functioncall
   
@@ -122,27 +148,7 @@ start ::=
   
 POSSIBLE GRAMMAR AMBIGUITIES
 
-1. Function call issues
-
-fn fname {
- -- stuff
-}
-
-and
-
-fn x {
- -- stuff with x
-}()
-
-These are both valid statements. The second is the direct calling of an
-anonymous function, the first is a function declaration. We'd have no
-way of knowing which was which until the function call. A possible solution
-is to have all value references wrapped in parenthesis. But that would make all
-function calling awkward: (something)(), (object.name[0])()
-Another possible solution is to get rid of function declarations all together, since
-they are just sugar for assigning anonymous functions to variables.
-
-2. Lack of semicolon issues
+1. Lack of semicolon issues
 
 if x > 2 : return
 
@@ -157,3 +163,37 @@ OTHER RANDOM NOTES
 
 I will probably get rid of integers at least for the first version. IEEE-754
 floating point numbers are far simpler to deal with.
+
+CODE SAMPLES
+
+fn Person name, age {
+  return { 
+    name: name,
+    age: age,
+    speak: fn self {
+      print('Hello, my name is ' + self.name)
+    }
+  }
+}
+
+-- or, sugar for functions returning a single expression
+fn Person name, age -> 
+  { name: name, age: age, 
+    speak: fn self -> 
+      print('hello, my name is ' + self.name) }
+
+let bob = Person('bob', 25)
+
+bob.speak(bob)
+
+-- or, sugar for implicitly passing the object as the first value
+bob::speak()
+
+fn add x, y -> x + y
+
+let a = add(2, 3)
+
+if a > 4 {
+  let x = min(
+}
+
