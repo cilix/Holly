@@ -40,12 +40,14 @@ typedef unsigned long hlWord_t;
 
 typedef struct {
   int error;
-} HollyState_t;
+} hlState_t;
 
-void* hl_malloc(HollyState_t* h, int s ){
+void* hl_malloc(hlState_t* h, int s ){
   void* buf;
   if( !(buf = malloc(s)) ){
      h->error = HL_MALLOC_FAIL;
+  } else {
+     memset(buf, 0, s);
   }
   return buf;
 }
@@ -57,7 +59,8 @@ void* hl_malloc(HollyState_t* h, int s ){
  
 typedef struct {
   int      l; /* key length */
-  hlWord_t k; /* key */
+  unsigned h; /* hash value */
+  hlByte_t k[HL_WORD_SIZE]; /* key */
   hlWord_t v; /* value */
 } hlHashEl_t; 
 
@@ -65,16 +68,38 @@ typedef struct {
   int         s; /* table size */
   int         c; /* table count */
   hlHashEl_t* t;
+  hlState_t*  state; /* compiler state */
 } hlHashTable_t;
 
 
-unsigned hlhprimes[] = {
+int hlhprimes[] = {
   5, 11, 23, 47, 97, 197, 397, 797, 1597, 3203, 6421, 
   12853, 25717, 51437, 102877, 205759, 411527, 823117, 
   1646237, 3292489, 6584983, 13169977, 26339969, 52679969, 
   105359939, 210719881, 421439783, 842879579, 1685759167
 };
 
+
+/* hash table function prototypes */
+void          hl_hw2b( hlByte_t*, hlWord_t, int );
+hlWord_t      hl_hb2w( hlByte_t*, int );
+hlHashTable_t hl_hinit( hlState_t*  );
+hlHashEl_t    hl_hinitnode( hlByte_t*, int, hlWord_t );
+unsigned      hl_hsax( hlByte_t *, int );
+void          hl_hset( hlHashTable_t*, hlByte_t*, int, hlWord_t );
+int           hl_hget( hlHashTable_t*, hlByte_t*, int );
+int           hl_hmatch( hlHashEl_t*, hlByte_t*, int );
+
+/* string hash function */
+unsigned hl_hsax( hlByte_t* k, int l ){
+  unsigned h = 0;
+  int i;
+  for( i = 0; i < l; i++ )
+    h ^= (h << 5) + (h >> 2) + k[i];
+  return h;
+}
+
+/* stores the data from a word into an array of bytes */
 void hl_hw2b( hlByte_t* b, hlWord_t w, int l ){
   int idx, i, s = (HL_BYTE_SIZE * l);
   for( i = HL_BYTE_SIZE; i <= s; i += HL_BYTE_SIZE ){
@@ -83,6 +108,7 @@ void hl_hw2b( hlByte_t* b, hlWord_t w, int l ){
   }
 }
 
+/* converts a stored word back into a word */
 hlWord_t hl_hb2w( hlByte_t* b, int l ){
   int idx, i, s = (HL_BYTE_SIZE * l);
   hlWord_t w = 0, n;
@@ -94,24 +120,99 @@ hlWord_t hl_hb2w( hlByte_t* b, int l ){
   return w;
 } 
 
-hlHashTable_t hl_init( HollyState_t s ){
+/* create a new hash table */
+hlHashTable_t hl_hinit( hlState_t* s ){
   hlHashTable_t h;
   h.c = 0;
   h.s = 0; /* index in the prime table */
-  /* malloc h.t to the size */
+  h.t = hl_malloc(s, hlhprimes[0] * sizeof(hlHashEl_t));
+  h.state = s;
   return h;
 } 
 
+/* create a hash table node */
 hlHashEl_t hl_hinitnode( hlByte_t* k, int l, hlWord_t v ){
   hlHashEl_t n;
   if( l < HL_WORD_SIZE ){
-    n.k = hl_hb2w(k, l);
+    memcpy(n.k, k, l);
   } else {
-    n.k = (hlWord_t)k;
+    hl_hw2b(n.k, (hlWord_t)k, HL_WORD_SIZE);
   }
   n.l = l;
   n.v = v;
+  n.h = hl_hsax(k, l);
   return n;
+}
+
+/* check if a node matches a key */
+int hl_hmatch( hlHashEl_t* n, hlByte_t* k, int l ){
+  hlByte_t* c;
+  hlWord_t w;
+  if( n->l != l ) return 0;
+  if( n->l < HL_WORD_SIZE ){
+    c = n->k;
+  } else {
+    w = hl_hb2w(n->k, n->l);
+    c = (hlByte_t *)w;
+  }
+  return !(memcmp(c, k, l));
+}
+
+/* resize a hash table either up or down */
+void hl_hresize( hlHashTable_t* h, int d ){
+  hlHashEl_t* t = h->t;
+  int i = 0, s = hlhprimes[h->s];
+  int ns, slot, j, idx;
+  h->s += d;
+  ns = hlhprimes[h->s];
+  h->t = hl_malloc(h->state, hlhprimes[h->s] * sizeof(hlHashEl_t));
+  for( ; i < s; i++ ){
+    if( !t[i].l ) continue;
+    slot = t[i].h % ns;
+    for( j = 0; j < ns; j++ ){
+      idx = (slot + j * j) % ns;
+      if( !h->t[idx].l ){
+        h->t[idx] = t[i];
+        break;
+      }
+    }
+  }
+}
+
+/* add entry to the hash table */
+void hl_hset( hlHashTable_t* h, hlByte_t* k, int l, hlWord_t v ){
+  int i, s = hlhprimes[h->s], idx;
+  hlHashEl_t n = hl_hinitnode(k, l, v);
+  unsigned slot = n.h % s;
+  if( !h->t[slot].l ){
+    h->t[slot] = n;
+  } else {
+    for( i = 0; i < s; i++ ){
+      idx = (slot + i * i) % s;
+      if( !h->t[idx].l ){
+        h->t[idx] = n;
+        break;
+      }
+    }
+  }
+  h->c++;
+  if( h->c >= (s/2) ){
+    hl_hresize(h, 1);
+  }
+}
+
+/* find the slot of the node */
+int hl_hget( hlHashTable_t* h, hlByte_t* k, int l ){
+  int idx, i, s = hlhprimes[h->s];
+  unsigned slot = hl_hsax(k, l) % s;
+  if( hl_hmatch(&(h->t[slot]), k, l) )
+    return slot;
+  for( i = 0; i < s; i++ ){
+    idx = (slot + i * i) % s;
+    if( hl_hmatch(&(h->t[idx]), k, l) )
+      return idx;
+  }
+  return -1;
 }
 
 /*
@@ -162,10 +263,10 @@ void primelist( void ){
   
   printf("\nunsigned hlhprimes[] = {");
   for( ; i < 29; i++ ){
-    ptest = s;
+    ptest = s + 1;
     prev = p;
     for( ;; ){
-      p = ptest++;
+      p = ptest += 2;
       if( p < (prev << 1) ) continue; 
       if( isprime(p) )
         break;
@@ -177,8 +278,60 @@ void primelist( void ){
   printf("};\n\n");
 }
 
+#include <time.h>
+
+/* get word from file */
+hlByte_t* getWord (FILE* f) {
+  hlByte_t* buf = NULL;
+  int c = 0, i = 0, bufsize = 10;
+  buf = malloc(bufsize + 1);
+  memset(buf, 0, bufsize + 1);
+  while ((c = fgetc(f)) != '\n') {
+    if (c == EOF) return NULL;
+    if (i == bufsize)
+      buf = realloc(buf, (bufsize += 10) + 1);
+    buf[i++] = (hlByte_t)c;
+  }
+  buf[i] = 0;
+  return buf;
+} 
+
+void loadWords (hlHashTable_t* root) {
+  FILE* in = fopen("../cuckoo/words.txt", "r");
+  hlByte_t* word = NULL;
+  int i = 0;
+  while ((word = getWord(in))) {
+    int l = strlen((char *)word);
+    hl_hset(root, word, l, (hlWord_t)word);
+  }
+  fclose(in);
+  /**
+  puts("inserted");
+  getchar();
+  in = fopen("words.txt", "r");
+  while ((word = getWord(in))) {
+    int l = strlen((char *)word);
+    hashdelete(root, word, l);
+  } 
+  /**/
+}
+
+void hashtest( void ){
+  hlState_t state;
+  double end, start;
+  hlHashTable_t table = hl_hinit(&state);
+
+  start = (float)clock()/CLOCKS_PER_SEC;
+  hl_hset(&table, (hlByte_t *)"matthew", 7, (hlWord_t)"levenstein");
+  loadWords(&table);
+  hl_hset(&table, (hlByte_t *)"matthew", 7, (hlWord_t)"barfenbutt");
+  end = (float)clock()/CLOCKS_PER_SEC;
+
+  printf("%s\n", (char *)(table.t[hl_hget(&table, (hlByte_t *)"matthew", 7)].v));
+  printf("Inserted %d objects in %fs - Table size: %d\n", table.c, end - start, hlhprimes[table.s]);
+}
 
 int main(void) {
-  primelist();  
+  hashtest();  
   return 0;
 }
