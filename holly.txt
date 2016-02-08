@@ -2,13 +2,26 @@ The Holly Programming Language
 
 types: String, Number, Object, Array, Boolean
 binary operators: | - + * ^ / % >> << & 
-compound: |= -= += *= ^= /= %= >>= <<= &= 
+assignment: |= -= += *= ^= /= %= >>= <<= &= =
 unary operator: ! ~ * -
 comparison: < > == != <= >= and or
 reserved symbols: \ { } [ ] : = ( ) ; , " ' -- :: ..
 other reserved words: let if else return while fn true false nil for in
 
 GRAMMER - BNF
+
+assignment ::=
+  OrEquals |
+  MinusEquals |
+  PlusEquals |
+  MultEquals |
+  DivEquals |
+  XorEquals |
+  ModEquals |
+  RshiftEquals |
+  LshiftEquals |
+  AndEquals |
+  Equals
 
 comparison ::=
   LessThan |
@@ -133,9 +146,11 @@ statement ::=
   whilestatement |
   `return` expression |
   `break` |
-  `let` Name `=` expression |
-  value `=` expression |        *value must not be a functioncall
-  value                         *value must be a functioncall
+  `let` Name assignment expression |
+  value assignment expression |        *value must not be a functioncall 
+  value                                *value must be a functioncall 
+                                       *just keep a flag in the 'access' function
+                                        keeping track of the last type parsed
   
 statementlist ::=
   statement [ `;` ] statementlist | *semicolon is optional
@@ -150,13 +165,24 @@ POSSIBLE GRAMMAR AMBIGUITIES
 
 1. Lack of semicolon issues
 
-if x > 2 : return
+x += 5
+
+return
 
 something()
 
-There's no way of knowing whether or not we're supposed to return
-the result of the function call. A possible solution is to require that
-return returns a value (like nil).  
+return will always parse the next parseable expression. The above 
+will be parsed as:
+
+return something()
+
+Another example:
+
+return 
+
+x += 2
+
+The above will trigger an error: 'unexpected +='.
 
 CODE SAMPLES
 
