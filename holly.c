@@ -80,7 +80,7 @@ int hlhprimes[] = {
 };
 
 
-/* hash table function prototypes */
+/* forward declarations */
 void          hl_hw2b( hlByte_t*, hlWord_t, int );
 hlWord_t      hl_hb2w( hlByte_t*, int );
 hlHashTable_t hl_hinit( hlState_t*  );
@@ -159,24 +159,24 @@ int hl_hmatch( hlHashEl_t* n, hlByte_t* k, int l ){
 }
 
 /* resize a hash table either up or down */
-void hl_hresize( hlHashTable_t* h, int d ){
+void hl_hresize( hlHashTable_t* h, int dir ){
   hlHashEl_t* t = h->t;
   int i = 0, s = hlhprimes[h->s];
   int ns, slot, j, idx;
-  h->s += d;
+  h->s += dir;
   ns = hlhprimes[h->s];
   h->t = hl_malloc(h->state, hlhprimes[h->s] * sizeof(hlHashEl_t));
-  for( ; i < s; i++ ){
+  for( ; i < s; i++ ){ /* for each node in the old array */
     if( !t[i].l ) continue;
     slot = t[i].h % ns;
-    for( j = 0; j < ns; j++ ){
-      idx = (slot + j * j) % ns;
-      if( !h->t[idx].l ){
-        h->t[idx] = t[i];
-        break;
-      }
+    for( j = 0; j < ns; j++ ){ /* insert into the new array */
+      idx = (slot + j * j) % ns; /* probe for new slot */
+      if( h->t[idx].l ) continue;
+      h->t[idx] = t[i];
+      break;
     }
   }
+  free(t);
 }
 
 /* add entry to the hash table */
@@ -189,10 +189,10 @@ void hl_hset( hlHashTable_t* h, hlByte_t* k, int l, hlWord_t v ){
   } else {
     for( i = 0; i < s; i++ ){
       idx = (slot + i * i) % s;
-      if( !h->t[idx].l ){
-        h->t[idx] = n;
-        break;
-      }
+      if( h->t[idx].l )
+        continue;
+      h->t[idx] = n;
+      break;
     }
   }
   h->c++;
