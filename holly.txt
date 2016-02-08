@@ -158,12 +158,6 @@ There's no way of knowing whether or not we're supposed to return
 the result of the function call. A possible solution is to require that
 return returns a value (like nil).  
 
-
-OTHER RANDOM NOTES
-
-I will probably get rid of integers at least for the first version. IEEE-754
-floating point numbers are far simpler to deal with.
-
 CODE SAMPLES
 
 let Person = fn name, age {

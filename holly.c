@@ -152,7 +152,7 @@ int hl_hmatch( hlHashEl_t* n, hlByte_t* k, int l ){
   if( n->l < HL_WORD_SIZE ){
     c = n->k;
   } else {
-    w = hl_hb2w(n->k, n->l);
+    w = hl_hb2w(n->k, HL_WORD_SIZE);
     c = (hlByte_t *)w;
   }
   return !(memcmp(c, k, l));
@@ -240,6 +240,10 @@ typedef hlByte_t  hlBool_t;
  * end values
  */
  
+/*
+ * a bunch of tests for data structures 
+ */
+ 
 #include <math.h>
  
 int isprime( unsigned n ){
@@ -299,21 +303,27 @@ hlByte_t* getWord (FILE* f) {
 void loadWords (hlHashTable_t* root) {
   FILE* in = fopen("../cuckoo/words.txt", "r");
   hlByte_t* word = NULL;
-  int i = 0;
+  int i = 0, total = 0;
   while ((word = getWord(in))) {
     int l = strlen((char *)word);
     hl_hset(root, word, l, (hlWord_t)word);
   }
   fclose(in);
-  /**
+  
   puts("inserted");
   getchar();
-  in = fopen("words.txt", "r");
+  
+  in = fopen("../cuckoo/words.txt", "r");
   while ((word = getWord(in))) {
     int l = strlen((char *)word);
-    hashdelete(root, word, l);
-  } 
-  /**/
+    i = hl_hget(root, word, l);
+    if( i > -1 ){
+      total++;
+    } else {
+      printf("Missing: %s\n", (char *)word);
+    }
+  }
+  printf("Total: %d\n", total);
 }
 
 void hashtest( void ){
@@ -332,6 +342,5 @@ void hashtest( void ){
 }
 
 int main(void) {
-  hashtest();  
   return 0;
 }
