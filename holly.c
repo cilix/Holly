@@ -66,8 +66,9 @@ typedef struct {
 
 typedef struct {
   int         s; /* table size */
-  int         c; /* table count */
+  unsigned    c; /* table count */
   hlHashEl_t* t;
+  char        f; /* table full */
   hlState_t*  state; /* compiler state */
 } hlHashTable_t;
 
@@ -89,6 +90,13 @@ unsigned      hl_hsax( hlByte_t *, int );
 void          hl_hset( hlHashTable_t*, hlByte_t*, int, hlWord_t );
 int           hl_hget( hlHashTable_t*, hlByte_t*, int );
 int           hl_hmatch( hlHashEl_t*, hlByte_t*, int );
+void          hl_hdel( hlHashTable_t*, hlByte_t*, int );
+
+/* the maximum index in the primes array
+ * this actually needs to be lowered substantially
+ * on 32-bit machines
+ */
+#define HL_HMAX 28
 
 /* string hash function */
 unsigned hl_hsax( hlByte_t* k, int l ){
@@ -124,6 +132,7 @@ hlWord_t hl_hb2w( hlByte_t* b, int l ){
 hlHashTable_t hl_hinit( hlState_t* s ){
   hlHashTable_t h;
   h.c = 0;
+  h.f = 0;
   h.s = 0; /* index in the prime table */
   h.t = hl_malloc(s, hlhprimes[0] * sizeof(hlHashEl_t));
   h.state = s;
@@ -161,17 +170,19 @@ int hl_hmatch( hlHashEl_t* n, hlByte_t* k, int l ){
 /* resize a hash table either up or down */
 void hl_hresize( hlHashTable_t* h, int dir ){
   hlHashEl_t* t = h->t;
-  int i = 0, s = hlhprimes[h->s];
-  int ns, slot, j, idx;
+  int slot, idx;
+  unsigned long ns, i = 0, j, s = hlhprimes[h->s];
   h->s += dir;
   ns = hlhprimes[h->s];
   h->t = hl_malloc(h->state, hlhprimes[h->s] * sizeof(hlHashEl_t));
   for( ; i < s; i++ ){ /* for each node in the old array */
-    if( !t[i].l ) continue;
+    if( !t[i].l )
+      continue;
     slot = t[i].h % ns;
     for( j = 0; j < ns; j++ ){ /* insert into the new array */
       idx = (slot + j * j) % ns; /* probe for new slot */
-      if( h->t[idx].l ) continue;
+      if( h->t[idx].l )
+        continue;
       h->t[idx] = t[i];
       break;
     }
@@ -181,29 +192,38 @@ void hl_hresize( hlHashTable_t* h, int dir ){
 
 /* add entry to the hash table */
 void hl_hset( hlHashTable_t* h, hlByte_t* k, int l, hlWord_t v ){
-  int i, s = hlhprimes[h->s], idx;
+  int idx;
   hlHashEl_t n = hl_hinitnode(k, l, v);
+  unsigned long i, s = hlhprimes[h->s];
   unsigned slot = n.h % s;
+  if( h->f ) return; /* table is full */
+  if( !l ) return;
   if( !h->t[slot].l ){
     h->t[slot] = n;
+    h->c++;
   } else {
     for( i = 0; i < s; i++ ){
       idx = (slot + i * i) % s;
       if( h->t[idx].l )
         continue;
       h->t[idx] = n;
+      h->c++;
       break;
     }
   }
-  h->c++;
   if( h->c >= (s/2) ){
+    if( h->s == HL_HMAX ){
+      h->f = 1;
+      return;
+    }
     hl_hresize(h, 1);
   }
 }
 
 /* find the slot of the node */
 int hl_hget( hlHashTable_t* h, hlByte_t* k, int l ){
-  int idx, i, s = hlhprimes[h->s];
+  int idx;
+  unsigned long i, s = hlhprimes[h->s];
   unsigned slot = hl_hsax(k, l) % s;
   if( hl_hmatch(&(h->t[slot]), k, l) )
     return slot;
@@ -213,6 +233,21 @@ int hl_hget( hlHashTable_t* h, hlByte_t* k, int l ){
       return idx;
   }
   return -1;
+}
+
+/* remove an item from the table */
+void hl_hdel( hlHashTable_t* h, hlByte_t* k, int l ){
+  int i = hl_hget(h, k, l);
+  unsigned long s = hlhprimes[h->s];
+  if( i == -1 ) return;  
+  /* possibly free the key */
+  memset(&(h->t[i]), 0, sizeof(hlHashEl_t));
+  h->c--;
+  h->f = 0; /* table is no longer full */
+  if( h->c < s/4 ){
+    if( h->s == 0 ) return;
+    hl_hresize(h, -1);
+  }
 }
 
 /*
@@ -310,8 +345,7 @@ void loadWords (hlHashTable_t* root) {
   }
   fclose(in);
   
-  puts("inserted");
-  getchar();
+  printf("inserted %d elements\n", root->c);
   
   in = fopen("../cuckoo/words.txt", "r");
   while ((word = getWord(in))) {
@@ -319,28 +353,37 @@ void loadWords (hlHashTable_t* root) {
     i = hl_hget(root, word, l);
     if( i > -1 ){
       total++;
-    } else {
-      printf("Missing: %s\n", (char *)word);
     }
   }
-  printf("Total: %d\n", total);
+  printf("retrieved %d elements\n", total);
+  
+  fclose(in);
+  
+  in = fopen("../cuckoo/words.txt", "r");
+  while ((word = getWord(in))) {
+    int l = strlen((char *)word);
+    hl_hdel(root, word, l);
+  }
+  
+  fclose(in);
+  puts("deleted");
+  printf("remaining elements: %d\n", root->c);
 }
 
 void hashtest( void ){
   hlState_t state;
+  int i;
   double end, start;
   hlHashTable_t table = hl_hinit(&state);
 
   start = (float)clock()/CLOCKS_PER_SEC;
-  hl_hset(&table, (hlByte_t *)"matthew", 7, (hlWord_t)"levenstein");
   loadWords(&table);
-  hl_hset(&table, (hlByte_t *)"matthew", 7, (hlWord_t)"barfenbutt");
   end = (float)clock()/CLOCKS_PER_SEC;
-
-  printf("%s\n", (char *)(table.t[hl_hget(&table, (hlByte_t *)"matthew", 7)].v));
-  printf("Inserted %d objects in %fs - Table size: %d\n", table.c, end - start, hlhprimes[table.s]);
+    
+  printf("Inserted, retrieved, and deleted %d objects in %fs - Table size: %d\n", table.c, end - start, hlhprimes[table.s]);
 }
 
 int main(void) {
+  hashtest();
   return 0;
 }
