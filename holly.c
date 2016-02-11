@@ -28,12 +28,8 @@
 /*
  * System wide definitions
  */
- 
-typedef unsigned char hlByte_t;
-typedef unsigned long hlWord_t;
 
-#define HL_WORD_SIZE 8 /* bytes in a word */
-#define HL_BYTE_SIZE 8 /* bits in a byte */
+#define HL_PTR_SIZE 8 /* bytes in a word */
 
 /* error codes */
 #define HL_MALLOC_FAIL 0x1
@@ -60,8 +56,11 @@ void* hl_malloc(hlState_t* h, int s ){
 typedef struct {
   int      l; /* key length */
   unsigned h; /* hash value */
-  hlByte_t k[HL_WORD_SIZE]; /* key */
-  hlWord_t v; /* value */
+  union {
+    unsigned char  skey[HL_PTR_SIZE];
+    unsigned char* lkey;
+  } k;
+  void* v; /* value */
 } hlHashEl_t; 
 
 typedef struct {
@@ -82,15 +81,15 @@ int hlhprimes[] = {
 
 
 /* forward declarations */
-void          hl_hw2b( hlByte_t*, hlWord_t, int );
-hlWord_t      hl_hb2w( hlByte_t*, int );
+void          hl_hw2b( unsigned char*, void*, int );
+void*         hl_hb2w( unsigned char*, int );
 hlHashTable_t hl_hinit( hlState_t*  );
-hlHashEl_t    hl_hinitnode( hlByte_t*, int, hlWord_t );
-unsigned      hl_hsax( hlByte_t *, int );
-void          hl_hset( hlHashTable_t*, hlByte_t*, int, hlWord_t );
-int           hl_hget( hlHashTable_t*, hlByte_t*, int );
-int           hl_hmatch( hlHashEl_t*, hlByte_t*, int );
-void          hl_hdel( hlHashTable_t*, hlByte_t*, int );
+hlHashEl_t    hl_hinitnode( unsigned char*, int, void* );
+unsigned      hl_hsax( unsigned char *, int );
+void          hl_hset( hlHashTable_t*, unsigned char*, int, void* );
+int           hl_hget( hlHashTable_t*, unsigned char*, int );
+int           hl_hmatch( hlHashEl_t*, unsigned char*, int );
+void          hl_hdel( hlHashTable_t*, unsigned char*, int );
 
 /* the maximum index in the primes array
  * this actually needs to be lowered substantially
@@ -99,34 +98,13 @@ void          hl_hdel( hlHashTable_t*, hlByte_t*, int );
 #define HL_HMAX 28
 
 /* string hash function */
-unsigned hl_hsax( hlByte_t* k, int l ){
+unsigned hl_hsax( unsigned char* k, int l ){
   unsigned h = 0;
   int i;
   for( i = 0; i < l; i++ )
     h ^= (h << 5) + (h >> 2) + k[i];
   return h;
 }
-
-/* stores the data from a word into an array of bytes */
-void hl_hw2b( hlByte_t* b, hlWord_t w, int l ){
-  int idx, i, s = (HL_BYTE_SIZE * l);
-  for( i = HL_BYTE_SIZE; i <= s; i += HL_BYTE_SIZE ){
-    idx = (i/HL_WORD_SIZE) - 1;
-    b[idx] = (w >> (s - i)) & 0xff;
-  }
-}
-
-/* converts a stored word back into a word */
-hlWord_t hl_hb2w( hlByte_t* b, int l ){
-  int idx, i, s = (HL_BYTE_SIZE * l);
-  hlWord_t w = 0, n;
-  for( i = HL_BYTE_SIZE; i <= s; i += HL_BYTE_SIZE ){
-    idx = (i/HL_BYTE_SIZE) - 1;
-    n = (hlWord_t)b[idx];
-    w |= (n << (s - i));
-  }
-  return w;
-} 
 
 /* create a new hash table */
 hlHashTable_t hl_hinit( hlState_t* s ){
@@ -140,12 +118,12 @@ hlHashTable_t hl_hinit( hlState_t* s ){
 } 
 
 /* create a hash table node */
-hlHashEl_t hl_hinitnode( hlByte_t* k, int l, hlWord_t v ){
+hlHashEl_t hl_hinitnode( unsigned char* k, int l, void* v ){
   hlHashEl_t n;
-  if( l < HL_WORD_SIZE ){
-    memcpy(n.k, k, l);
+  if( l < HL_PTR_SIZE ){
+    memcpy(n.k.skey, k, l);
   } else {
-    hl_hw2b(n.k, (hlWord_t)k, HL_WORD_SIZE);
+    n.k.lkey = k;
   }
   n.l = l;
   n.v = v;
@@ -154,15 +132,14 @@ hlHashEl_t hl_hinitnode( hlByte_t* k, int l, hlWord_t v ){
 }
 
 /* check if a node matches a key */
-int hl_hmatch( hlHashEl_t* n, hlByte_t* k, int l ){
-  hlByte_t* c;
-  hlWord_t w;
+int hl_hmatch( hlHashEl_t* n, unsigned char* k, int l ){
+  unsigned char* c;
+  void* w;
   if( n->l != l ) return 0;
-  if( n->l < HL_WORD_SIZE ){
-    c = n->k;
+  if( n->l < HL_PTR_SIZE ){
+    c = n->k.skey;
   } else {
-    w = hl_hb2w(n->k, HL_WORD_SIZE);
-    c = (hlByte_t *)w;
+    c = n->k.lkey;
   }
   return !(memcmp(c, k, l));
 }
@@ -191,7 +168,7 @@ void hl_hresize( hlHashTable_t* h, int dir ){
 }
 
 /* add entry to the hash table */
-void hl_hset( hlHashTable_t* h, hlByte_t* k, int l, hlWord_t v ){
+void hl_hset( hlHashTable_t* h, unsigned char* k, int l, void* v ){
   int idx;
   hlHashEl_t n = hl_hinitnode(k, l, v);
   unsigned long i, s = hlhprimes[h->s];
@@ -221,7 +198,7 @@ void hl_hset( hlHashTable_t* h, hlByte_t* k, int l, hlWord_t v ){
 }
 
 /* find the slot of the node */
-int hl_hget( hlHashTable_t* h, hlByte_t* k, int l ){
+int hl_hget( hlHashTable_t* h, unsigned char* k, int l ){
   int idx;
   unsigned long i, s = hlhprimes[h->s];
   unsigned slot = hl_hsax(k, l) % s;
@@ -236,7 +213,7 @@ int hl_hget( hlHashTable_t* h, hlByte_t* k, int l ){
 }
 
 /* remove an item from the table */
-void hl_hdel( hlHashTable_t* h, hlByte_t* k, int l ){
+void hl_hdel( hlHashTable_t* h, unsigned char* k, int l ){
   int i = hl_hget(h, k, l);
   unsigned long s = hlhprimes[h->s];
   if( i == -1 ) return;  
@@ -258,9 +235,9 @@ void hl_hdel( hlHashTable_t* h, hlByte_t* k, int l ){
  * Types
  */
 
-typedef hlByte_t* hlString_t;
+typedef unsigned char* hlString_t;
 typedef double    hlNum_t;
-typedef hlByte_t  hlBool_t;
+typedef unsigned char  hlBool_t;
 
 /*
  * NaN-Boxed Values
@@ -320,8 +297,8 @@ void primelist( void ){
 #include <time.h>
 
 /* get word from file */
-hlByte_t* getWord (FILE* f) {
-  hlByte_t* buf = NULL;
+unsigned char* getWord (FILE* f) {
+  unsigned char* buf = NULL;
   int c = 0, i = 0, bufsize = 10;
   buf = malloc(bufsize + 1);
   memset(buf, 0, bufsize + 1);
@@ -329,7 +306,7 @@ hlByte_t* getWord (FILE* f) {
     if (c == EOF) return NULL;
     if (i == bufsize)
       buf = realloc(buf, (bufsize += 10) + 1);
-    buf[i++] = (hlByte_t)c;
+    buf[i++] = (unsigned char)c;
   }
   buf[i] = 0;
   return buf;
@@ -337,11 +314,11 @@ hlByte_t* getWord (FILE* f) {
 
 void loadWords (hlHashTable_t* root) {
   FILE* in = fopen("../cuckoo/words.txt", "r");
-  hlByte_t* word = NULL;
+  unsigned char* word = NULL;
   int i = 0, total = 0;
   while ((word = getWord(in))) {
     int l = strlen((char *)word);
-    hl_hset(root, word, l, (hlWord_t)word);
+    hl_hset(root, word, l, (void*)word);
   }
   fclose(in);
   
@@ -376,7 +353,7 @@ void hashtest( void ){
   double end, start;
   hlHashTable_t table = hl_hinit(&state);
 
-  start = (float)clock()/CLOCKS_PER_SEC;
+  start = (float)clock()/CLOCKS_PER_SEC; 
   loadWords(&table);
   end = (float)clock()/CLOCKS_PER_SEC;
     
