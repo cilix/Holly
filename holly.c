@@ -232,25 +232,40 @@ void hl_hdel( hlHashTable_t* h, unsigned char* k, int l ){
  */ 
 
 /*
- * Types
- */
-
-typedef unsigned char* hlString_t;
-typedef double    hlNum_t;
-typedef unsigned char  hlBool_t;
-
-/*
- * NaN-Boxed Values
+ * Values and Types
  */
  
-#define hlnan  0x7ff8000000000000
-#define hlnnan 0xfff8000000000000
-#define hlinf  0x7ff0000000000000
-#define hlninf 0xfff0000000000000
- 
-/*
- * end values
- */
+#define hlObjType  1
+#define hlArrType  2
+#define hlStrType  3
+#define hlBoolType 4
+#define hlNumType  5
+
+typedef unsigned char*    hlString_t;
+typedef double            hlNum_t;
+typedef unsigned char     hlBool_t;
+typedef struct _hlValue_t hlValue_t;
+
+typedef struct {
+  /* maybe meta data */
+  hlHashTable_t* h;
+} hlObject_t;
+
+typedef struct {
+  /* maybe meta data, probably not */
+  hlValue_t* v; /* index 0 will contain length */
+} hlArray_t;
+
+struct _hvValue_t {
+  int t;
+  union {
+    hlString_t s;
+    hlNum_t    n;
+    hlBool_t   b;
+    hlObject_t o;
+    hlArray_t  a;
+  } v;
+};
  
 /*
  * a bunch of tests for data structures 
@@ -319,7 +334,7 @@ void loadWords (hlHashTable_t* root) {
   while ((word = getWord(in))) {
     int l = strlen((char *)word);
     hl_hset(root, word, l, (void*)word);
-  }
+  }/*
   fclose(in);
   
   printf("inserted %d elements\n", root->c);
@@ -344,7 +359,7 @@ void loadWords (hlHashTable_t* root) {
   
   fclose(in);
   puts("deleted");
-  printf("remaining elements: %d\n", root->c);
+  printf("remaining elements: %d\n", root->c);*/
 }
 
 void hashtest( void ){
