@@ -5,8 +5,8 @@ binary operators: | - + * ^ / % >> << &
 assignment: |= -= += *= ^= /= %= >>= <<= &= =
 unary operator: ! ~ * -
 comparison: < > == != <= >= and or
-reserved symbols: \ { } [ ] : = ( ) ; , " ' -- :: ..
-other reserved words: let if else return while fn true false nil for in
+reserved symbols: \ { } [ ] : ( ) ; , " ' -- :: .. . ->
+other reserved words: let if else return while fn true false nil for in break
 
 GRAMMER - BNF
 
@@ -68,15 +68,21 @@ expression ::=
   `(` expression `)` 
   
 value ::=
-  object access |
-  array access |
-  Name access |
-  lambda access
+  object [ access ] |
+  array [ access ] |
+  Name valuesuffix |
+  lambda [ functioncallsuffix ]
   
 access ::=
-  `.` Name access |
-  `[` expressions `]` access |
-  functioncallend access |
+  `.` Name valuesuffix |
+  `[` expressions `]` valuesuffix |  
+  
+functioncallsuffix ::=
+  `(` expressionlist `)` valuesuffix
+  
+valuesuffix ::=
+  access |
+  functioncallsuffix |
   nil
 
 block ::=
@@ -85,9 +91,6 @@ block ::=
 lambda ::=
   `fn` namelist block | 
   `fn` namelist `->` expression 
-  
-functioncallend ::=
-  `(` expressionlist `)`
   
 expressionlist ::=
   expression |

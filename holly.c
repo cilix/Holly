@@ -32,21 +32,12 @@
 #define HL_PTR_SIZE 8 /* bytes in a word */
 
 /* error codes */
-#define HL_MALLOC_FAIL 0x1
+#define HL_MALLOC_FAIL 1
 
-typedef struct {
-  int error;
-} hlState_t;
+/* forward declaration */
+typedef struct _hlState_t hlState_t;
 
-void* hl_malloc(hlState_t* h, int s ){
-  void* buf;
-  if( !(buf = malloc(s)) ){
-     h->error = HL_MALLOC_FAIL;
-  } else {
-     memset(buf, 0, s);
-  }
-  return buf;
-}
+void* hl_malloc( hlState_t*, int );
 
 /*
  * Hash Table
@@ -80,15 +71,10 @@ int hlhprimes[] = {
 };
 
 
-/* forward declarations */
-void          hl_hw2b( unsigned char*, void*, int );
-void*         hl_hb2w( unsigned char*, int );
+/* hash table api */
 hlHashTable_t hl_hinit( hlState_t*  );
-hlHashEl_t    hl_hinitnode( unsigned char*, int, void* );
-unsigned      hl_hsax( unsigned char *, int );
 void          hl_hset( hlHashTable_t*, unsigned char*, int, void* );
 int           hl_hget( hlHashTable_t*, unsigned char*, int );
-int           hl_hmatch( hlHashEl_t*, unsigned char*, int );
 void          hl_hdel( hlHashTable_t*, unsigned char*, int );
 
 /* the maximum index in the primes array
@@ -134,7 +120,6 @@ hlHashEl_t hl_hinitnode( unsigned char* k, int l, void* v ){
 /* check if a node matches a key */
 int hl_hmatch( hlHashEl_t* n, unsigned char* k, int l ){
   unsigned char* c;
-  void* w;
   if( n->l != l ) return 0;
   if( n->l < HL_PTR_SIZE ){
     c = n->k.skey;
@@ -233,6 +218,9 @@ void hl_hdel( hlHashTable_t* h, unsigned char* k, int l ){
 
 /*
  * Values and Types
+ * Arithmetic functions are declared here as well as some primitive functions
+ *   like array, string and object access and manipulation
+ * Other functions belong in the stdlib via the embedding api
  */
  
 #define hlObjType  1
@@ -241,32 +229,229 @@ void hl_hdel( hlHashTable_t* h, unsigned char* k, int l ){
 #define hlBoolType 4
 #define hlNumType  5
 
-typedef unsigned char*    hlString_t;
 typedef double            hlNum_t;
 typedef unsigned char     hlBool_t;
 typedef struct _hlValue_t hlValue_t;
 
 typedef struct {
+  int l;
+  union {
+    unsigned char  s[HL_PTR_SIZE]; 
+    unsigned char* l;
+  } str;
+} hlString_t;
+
+typedef struct {
   /* maybe meta data */
-  hlHashTable_t* h;
+  hlHashTable_t h;
 } hlObject_t;
 
 typedef struct {
   /* maybe meta data, probably not */
+  /* if definitely not, ditch the box */
   hlValue_t* v; /* index 0 will contain length */
 } hlArray_t;
 
-struct _hvValue_t {
+struct _hlValue_t {
   int t;
   union {
-    hlString_t s;
-    hlNum_t    n;
-    hlBool_t   b;
-    hlObject_t o;
-    hlArray_t  a;
+    hlString_t* s; /* objects larger than 8 bytes are references */
+    hlNum_t     n;
+    hlBool_t    b;
+    hlObject_t* o; 
+    hlArray_t   a;
   } v;
 };
+
+hlValue_t hl_value_init( char type ){
+  hlValue_t v;
+  v.t = type;
+  return v;
+}
+
+/*
+ * Token Data
+ */
  
+/*
+types: String, Number, Object, Array, Boolean
+binary operators: | - + * ^ / % >> << & 
+assignment: |= -= += *= ^= /= %= >>= <<= &= =
+unary operator: ! ~ * -
+comparison: < > == != <= >= and or
+reserved symbols: \ { } [ ] : ( ) ; , " ' -- :: .. . ->
+other reserved words: let if else return while fn true false nil for in break
+*/
+
+typedef struct {
+  char type;
+  int  l;
+  union {
+    hlNum_t number;
+    unsigned char* data;
+  } data;
+} hlToken_t;
+
+#define hl_ismatch(x, y, z) (!strncmp((const char *)x, (const char *)y, z))
+#define hl_isspace(x)       (x == ' ' || x == '\t' || x == '\n')
+#define hl_isdigit(x)       (x >= '0' && x <= '9')
+#define hl_islower(x)       (x >= 'a' && x <= 'z')
+#define hl_isupper(x)       (x >= 'A' && x <= 'Z')
+#define hl_isalpha(x)       (hl_islower(x) || hl_isupper(x))
+#define hl_ishex(x)         (hl_isdigit(x) || hl_islower(x))
+
+const int hlTkCnt = 59;
+
+const char* hlTkns[] = {
+  "String", "Number", "Object", "Array", "Boolean",
+  "|=", "-=", "+=", "*=", "^=", "/=", "%=", ">>=", 
+  "<<=", "&=", "<=", ">=", "and", "or", "<<", ">>",
+  "\\", "{", "}", "[", "]", ":", "(", ")", ";", ","
+  "::", "..", ".", "->", "!", "~", "*", "|", "-", 
+  "+", "^", "/", "%", ">", "<", "&", "=", "let", 
+  "if", "else", "return", "while", "fn", "true", 
+  "false", "nil", "for", "in", "break",
+  "<string>", "<number>", "<object>", "<array>", 
+  "<boolean>", "<name>", "<eof>"
+};
+
+#define hlTokStringType 1
+#define hlTokNumberType 2
+#define hlTokObjectType 3
+#define hlTokArrayType  4
+#define hlTokBoolType   5
+
+
+/*
+ * Compiler State
+ */
+
+struct _hlState_t {
+  int            error;
+  int            ptr;
+  hlToken_t      ctok;
+  unsigned char* prog;
+};
+ 
+
+void* hl_malloc(hlState_t* h, int s ){
+  void* buf;
+  if( !(buf = malloc(s)) ){
+     h->error = HL_MALLOC_FAIL;
+  } else {
+     memset(buf, 0, s);
+  }
+  return buf;
+}
+ 
+/*
+ * Parser
+ */
+
+unsigned char hl_pesc( unsigned char c ){
+  switch( c ){
+    case 'a': c = '\a'; break;
+    case 'b': c = '\b'; break;
+    case 'f': c = '\f'; break;
+    case 'n': c = '\n'; break;
+    case 'r': c = '\r'; break;
+    case 't': c = '\t'; break;
+    case 'v': c = '\v'; break;
+    default:            break;
+    /* deal with unicode */
+  }
+  return c;
+}
+
+unsigned char* hl_pstr( hlState_t* s, unsigned char* v, int l ){
+  int i = 0, j = 0;
+  unsigned char c;
+  unsigned char* b = hl_malloc(s, l + 1);
+  if( !b ) return NULL;
+  while( i < l ){
+    c = v[i++];
+    b[j++] = c == '\\' ? hl_pesc(v[i++]) : c;
+  }
+  return b;
+}
+
+unsigned char* hl_pname( hlState_t* s, unsigned char* v ){
+  int i = 0;
+  unsigned char* b;
+  while(
+    hl_isalpha(*(v + i)) ||
+    hl_isdigit(*(v + i)) ||
+    (*(v + i) == '_') 
+  ) i++;
+  b  = hl_malloc(s, i + 1);
+  if( !b ) return NULL;
+  memcpy(b, v, i);
+  return b;
+}
+
+void hl_pnext( hlState_t* s ){
+  int i, x;
+  unsigned char* p = s->prog;
+  /* possibly free previous token data here */
+  s->ctok.type = -1;
+  while( 
+    p[s->ptr] == ' '  || 
+    p[s->ptr] == '\t' || 
+    p[s->ptr] == '\n') s->ptr++; 
+  x = s->ptr;
+  for( i = 0; i < hlTkCnt; i++ ){
+    int l = strlen(hlTkns[i]);
+    if( hl_ismatch(p + x, hlTkns[i], l) ){
+      s->ctok.type = i;
+      s->ptr += l;
+      return;
+    }
+  }
+  switch( p[x] ){
+    case 0:
+      s->ctok.type = -1;
+      return;
+    case '\'':
+    case '"': {
+      int i = 1;
+      char cmp = p[x];
+      unsigned char c, *str;
+      while( 
+        (c = p[x + i]) &&
+        (c != cmp || p[x + i - 1] == '\\')
+      ) i++;
+      str = hl_pstr(s, p + x + 1, i - 1);
+      if( str ){
+        s->ctok.type = 59; /* string tok */
+        s->ctok.data.data = str;
+        s->ptr += (i + 1);
+      } else {
+        /* error */
+      }
+      return;
+    } break;
+    default: {
+      if( hl_isalpha(p[x]) ){
+        unsigned char* str;
+        int l = 0;
+        s->ctok.type = 64; /* name tok */
+        str = hl_pname(s, p + x);
+        if( str ){
+          l = strlen(str);
+          s->ctok.data.data = str;
+          s->ptr += l;
+          s->ctok.l = l;
+        } else {
+          /* error */
+        }
+        return;
+      }
+      break;
+    }
+  }
+  s->ptr++;
+}
+
 /*
  * a bunch of tests for data structures 
  */
@@ -330,7 +515,7 @@ unsigned char* getWord (FILE* f) {
 void loadWords (hlHashTable_t* root) {
   FILE* in = fopen("../cuckoo/words.txt", "r");
   unsigned char* word = NULL;
-  int i = 0, total = 0;
+  /*int i = 0, total = 0;*/
   while ((word = getWord(in))) {
     int l = strlen((char *)word);
     hl_hset(root, word, l, (void*)word);
@@ -364,7 +549,6 @@ void loadWords (hlHashTable_t* root) {
 
 void hashtest( void ){
   hlState_t state;
-  int i;
   double end, start;
   hlHashTable_t table = hl_hinit(&state);
 
@@ -375,7 +559,35 @@ void hashtest( void ){
   printf("Inserted, retrieved, and deleted %d objects in %fs - Table size: %d\n", table.c, end - start, hlhprimes[table.s]);
 }
 
-int main(void) {
-  hashtest();
+unsigned char* readfile( const char* n ){
+  unsigned char *buf;
+  long fsize;
+  FILE *f = fopen(n, "rb");
+  fseek(f, 0, SEEK_END);
+  fsize = ftell(f);
+  fseek(f, 0, SEEK_SET);
+  buf = malloc(fsize + 1);
+  if( !fread(buf, fsize, 1, f) ){
+    fclose(f);
+    return NULL;
+  }
+  fclose(f);
+  buf[fsize] = 0;
+  return buf;
+}
+
+int main( int argc, char** argv ) {
+  if( argc > 1 ){
+    unsigned char* p = readfile(argv[1]);
+    hlState_t s;
+    s.prog = p;
+    s.ctok.type = -1;
+    hl_pnext(&s);
+    while( s.ctok.type > -1 ){
+      printf("%s\n", hlTkns[(int)s.ctok.type]);
+      if( s.ctok.type == 59 || s.ctok.type == 64 ) puts((const char *)(s.ctok.data.data));
+      hl_pnext(&s);
+    } 
+  }
   return 0;
 }
