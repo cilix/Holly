@@ -31,8 +31,18 @@
 
 #define HL_PTR_SIZE 8 /* bytes in a word */
 
+#define hl_eabort(s) do { if( s->error ) return; } while( 0 )
+#define hl_eabortr(s, r) do { if( s->error ) return r; } while( 0 )
+
 /* error codes */
 #define HL_MALLOC_FAIL 1
+#define HL_LEXSTR_ERR  2
+
+const char* hlErrors[] = {
+  NULL,
+  "malloc failure",
+  "Lex error: incomplete string",
+};
 
 /* forward declaration */
 typedef struct _hlState_t hlState_t;
@@ -392,13 +402,14 @@ unsigned char* hl_pname( hlState_t* s, unsigned char* v ){
 void hl_pnext( hlState_t* s ){
   int i, x;
   unsigned char* p = s->prog;
-  /* possibly free previous token data here */
+  hl_eabort(s);
+  /* possibly free previous token data here 
+     probably not, so we can pass the data to the vm */
   s->ctok.type = -1;
   while( hl_isspace(p[s->ptr]) ) s->ptr++; 
-  
-  /* comments */
-  /* inline comments start with -- */
-  /* block comments start with --- and end with -- */
+  /* comments 
+     inline comments start with -- 
+     block comments start with --- and end with -- */
   if( hl_ismatch(p + s->ptr, "--", 2) ){
     s->ptr += 2;
     if( p[s->ptr] == '-' ){
@@ -412,16 +423,15 @@ void hl_pnext( hlState_t* s ){
     }
     while( hl_isspace(p[s->ptr]) ) s->ptr++; 
   }
-  
   x = s->ptr;
-  
   if( !p[x] ){
     s->ctok.type = -1;
     return;
   }
-  
   for( i = 0; i < hlTkCnt; i++ ){
     int l = strlen(hlTkns[i]);
+    /* make sure the string comparison doesn't go off 
+       the end of the buffer */
     if( hl_ismatch(p + x, hlTkns[i], l) ){
       if( i == 53 || i == 54 ){
         s->ctok.type = 63; /* boolean */
@@ -445,13 +455,15 @@ void hl_pnext( hlState_t* s ){
         (c = p[x + i]) &&
         (c != cmp || p[x + i - 1] == '\\')
       ) i++;
+      if( !c ){
+        s->error = HL_LEXSTR_ERR;
+        return;
+      }
       str = hl_pstr(s, p + x + 1, i - 1);
       if( str ){
         s->ctok.type = 59; /* string tok */
         s->ctok.data.data = str;
         s->ptr += (i + 1);
-      } else {
-        /* error */
       }
       return;
     } break;
@@ -466,15 +478,12 @@ void hl_pnext( hlState_t* s ){
           s->ctok.data.data = str;
           s->ptr += l;
           s->ctok.l = l;
-        } else {
-          /* error */
         }
         return;
       } else if( hl_isdigit(p[x]) ){
-      
+        /* parse float */
       }
-      break;
-    }
+    } break;
   }
   s->ptr++;
 }
@@ -607,6 +616,7 @@ int main( int argc, char** argv ) {
   if( argc > 1 ){
     unsigned char* p = readfile(argv[1]);
     hlState_t s;
+    s.error = 0;
     s.prog = p;
     s.ctok.type = -1;
     hl_pnext(&s);
@@ -615,6 +625,9 @@ int main( int argc, char** argv ) {
       if( s.ctok.type == 59 || s.ctok.type == 64 ) puts((const char *)(s.ctok.data.data));
       hl_pnext(&s);
     } 
+    if( s.error ){
+      puts(hlErrors[s.error]);
+    }
   }
   return 0;
 }
