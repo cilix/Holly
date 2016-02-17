@@ -358,7 +358,7 @@ unsigned char hl_pesc( unsigned char c ){
     case 't': c = '\t'; break;
     case 'v': c = '\v'; break;
     default:            break;
-    /* deal with unicode */
+    /* deal with \x */
   }
   return c;
 }
@@ -394,15 +394,40 @@ void hl_pnext( hlState_t* s ){
   unsigned char* p = s->prog;
   /* possibly free previous token data here */
   s->ctok.type = -1;
-  while( 
-    p[s->ptr] == ' '  || 
-    p[s->ptr] == '\t' || 
-    p[s->ptr] == '\n') s->ptr++; 
+  while( hl_isspace(p[s->ptr]) ) s->ptr++; 
+  
+  /* comments */
+  /* inline comments start with -- */
+  /* block comments start with --- and end with -- */
+  if( hl_ismatch(p + s->ptr, "--", 2) ){
+    s->ptr += 2;
+    if( p[s->ptr] == '-' ){
+      while( 
+        !hl_ismatch(p + s->ptr, "--", 2) && 
+        p[s->ptr] != 0
+      ) s->ptr++;
+      if( p[s->ptr] != 0 ) s->ptr += 2;
+    } else {
+      while( p[s->ptr] != '\n' && p[s->ptr] != 0 ) s->ptr++; 
+    }
+    while( hl_isspace(p[s->ptr]) ) s->ptr++; 
+  }
+  
   x = s->ptr;
+  
+  if( !p[x] ){
+    s->ctok.type = -1;
+    return;
+  }
+  
   for( i = 0; i < hlTkCnt; i++ ){
     int l = strlen(hlTkns[i]);
     if( hl_ismatch(p + x, hlTkns[i], l) ){
-      s->ctok.type = i;
+      if( i == 53 || i == 54 ){
+        s->ctok.type = 63; /* boolean */
+      } else {
+        s->ctok.type = i;
+      }
       s->ptr += l;
       return;
     }
@@ -437,7 +462,7 @@ void hl_pnext( hlState_t* s ){
         s->ctok.type = 64; /* name tok */
         str = hl_pname(s, p + x);
         if( str ){
-          l = strlen(str);
+          l = strlen((const char *)str);
           s->ctok.data.data = str;
           s->ptr += l;
           s->ctok.l = l;
@@ -445,6 +470,8 @@ void hl_pnext( hlState_t* s ){
           /* error */
         }
         return;
+      } else if( hl_isdigit(p[x]) ){
+      
       }
       break;
     }
