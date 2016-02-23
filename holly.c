@@ -435,6 +435,7 @@ void hl_pnext( hlState_t* s ){
     if( hl_ismatch(p + x, hlTkns[i], l) ){
       if( i == 53 || i == 54 ){
         s->ctok.type = 63; /* boolean */
+        s->ctok.data.number = (i == 53);
       } else {
         s->ctok.type = i;
       }
