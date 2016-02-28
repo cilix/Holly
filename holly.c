@@ -308,7 +308,12 @@ typedef struct {
 #define hl_islower(x)       (x >= 'a' && x <= 'z')
 #define hl_isupper(x)       (x >= 'A' && x <= 'Z')
 #define hl_isalpha(x)       (hl_islower(x) || hl_isupper(x))
-#define hl_ishex(x)         (hl_isdigit(x) || hl_islower(x))
+#define hl_ishex(x)         (x >= 'a' && x <= 'f')
+
+#define hl_hextod(x) do { \
+  if( hl_isdigit(x) ) x = x - '0'; \
+  else if( hl_ishex(x) ) x = 10 + (x - 'a'); \
+} while( 0 )
 
 const int hlTkCnt = 59;
 
@@ -358,7 +363,8 @@ void* hl_malloc(hlState_t* h, int s ){
  * Parser
  */
 
-unsigned char hl_pesc( unsigned char c ){
+unsigned char hl_pesc( unsigned char* p, int* i ){
+  unsigned char c = *p;
   switch( c ){
     case 'a': c = '\a'; break;
     case 'b': c = '\b'; break;
@@ -367,9 +373,18 @@ unsigned char hl_pesc( unsigned char c ){
     case 'r': c = '\r'; break;
     case 't': c = '\t'; break;
     case 'v': c = '\v'; break;
-    default:            break;
-    /* deal with \x */
+    case 'x': {
+      unsigned char l = *(p + 1);
+      unsigned char r = *(p + 2);
+      hl_hextod(l);
+      hl_hextod(r);
+      c = l << 4;
+      c = c | r;
+      (*i) += 2; 
+    } break;
+    default: break;
   }
+  (*i)++;
   return c;
 }
 
@@ -380,7 +395,7 @@ unsigned char* hl_pstr( hlState_t* s, unsigned char* v, int l ){
   if( !b ) return NULL;
   while( i < l ){
     c = v[i++];
-    b[j++] = c == '\\' ? hl_pesc(v[i++]) : c;
+    b[j++] = c == '\\' ? hl_pesc(v + i, &i) : c;
   }
   return b;
 }
@@ -435,7 +450,7 @@ void hl_pnext( hlState_t* s ){
     if( hl_ismatch(p + x, hlTkns[i], l) ){
       if( i == 53 || i == 54 ){
         s->ctok.type = 63; /* boolean */
-        s->ctok.data.number = (i == 53);
+        s->ctok.data.number = (i == 53); /* i == true */
       } else {
         s->ctok.type = i;
       }
@@ -450,11 +465,11 @@ void hl_pnext( hlState_t* s ){
     case '\'':
     case '"': {
       int i = 1;
-      char cmp = p[x];
+      char end = p[x];
       unsigned char c, *str;
       while( 
         (c = p[x + i]) &&
-        (c != cmp || p[x + i - 1] == '\\')
+        (c != end || p[x + i - 1] == '\\')
       ) i++;
       if( !c ){
         s->error = HL_LEXSTR_ERR;
@@ -623,7 +638,8 @@ int main( int argc, char** argv ) {
     hl_pnext(&s);
     while( s.ctok.type > -1 ){
       printf("%s\n", hlTkns[(int)s.ctok.type]);
-      if( s.ctok.type == 59 || s.ctok.type == 64 ) puts((const char *)(s.ctok.data.data));
+      if( s.ctok.type == 59 || s.ctok.type == 64 ) 
+        puts((const char *)(s.ctok.data.data));
       hl_pnext(&s);
     } 
     if( s.error ){

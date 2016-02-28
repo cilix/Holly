@@ -1,4 +1,4 @@
-"hello there how are you fn if else { } while --- 
+"hello there how are you" fn if else { } while --- 
 asdlfklakdjf lakdfjs lakdjs flka a
 sdk return flka d
 sad
@@ -8,6 +8,7 @@ sad
 
 
 
-retur--
-else 
+--return 
+else true false
+"line1\n\tl\x61ne2"
 fi 
