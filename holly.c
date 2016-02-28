@@ -419,6 +419,16 @@ unsigned char* hl_pname( hlState_t* s, unsigned char* v ){
   return b;
 }
 
+int hl_ppow( int b, int e ){
+  int r = 1;
+  while( e ){
+    if( e & 1 ) r *= b;
+    e >>= 1;
+    b *= b;
+  }
+  return r;
+}
+
 void hl_pnext( hlState_t* s ){
   int i, x;
   unsigned char* p = s->prog;
@@ -502,7 +512,31 @@ void hl_pnext( hlState_t* s ){
         }
         return;
       } else if( hl_isdigit(p[x]) ){
-        /* parse float */
+        int i = 0, df = 0, dc = 0;
+        unsigned char c;
+        hlNum_t r = 0.0f, dec = 0.0f;
+        while( 
+          (c = p[x + i]) &&
+          (hl_isdigit(c) || (c == '.' && !df))
+        ){
+          if( c == '.' ) df = 1;
+          else {
+            if( !df ) r = r * 10 + (c - '0');
+            else {
+              dc++;
+              dec = dec * 10 + (c - '0');
+            }
+          }
+          i++;  
+        }
+        if( dec ){
+          dec /= hl_ppow(10, dc);
+          r += dec;
+        }
+        s->ctok.data.number = r;
+        s->ptr += i + 1;
+        s->ctok.type = 60; /* number */
+        return;
       }
     } break;
   }
@@ -645,6 +679,8 @@ int main( int argc, char** argv ) {
       printf("%s\n", hlTkns[(int)s.ctok.type]);
       if( s.ctok.type == 59 || s.ctok.type == 64 ) 
         puts((const char *)(s.ctok.data.data));
+      if( s.ctok.type == 60 )
+        printf("%f\n", s.ctok.data.number);
       hl_pnext(&s);
     } 
     if( s.error ){

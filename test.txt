@@ -13,4 +13,6 @@ else true false
 "line1\n\tl\x61ne2"
 "hel\llo \
 there mo\7th\1\2\3erf\uucker"
-fi 
+76
+fi
+876.2345 
