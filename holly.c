@@ -382,7 +382,7 @@ unsigned char hl_pesc( unsigned char* p, int* i ){
       c = c | r;
       (*i) += 2; 
     } break;
-    default: break;
+    default: c = 0; break;
   }
   (*i)++;
   return c;
@@ -390,12 +390,17 @@ unsigned char hl_pesc( unsigned char* p, int* i ){
 
 unsigned char* hl_pstr( hlState_t* s, unsigned char* v, int l ){
   int i = 0, j = 0;
-  unsigned char c;
+  unsigned char c, e;
   unsigned char* b = hl_malloc(s, l + 1);
   if( !b ) return NULL;
   while( i < l ){
     c = v[i++];
-    b[j++] = c == '\\' ? hl_pesc(v + i, &i) : c;
+    if( c == '\\' ){
+      e = hl_pesc(v + i, &i);
+      if( e ) b[j++] = e;
+    } else {
+      b[j++] = c;
+    }
   }
   return b;
 }
@@ -408,7 +413,7 @@ unsigned char* hl_pname( hlState_t* s, unsigned char* v ){
     hl_isdigit(*(v + i)) ||
     (*(v + i) == '_') 
   ) i++;
-  b  = hl_malloc(s, i + 1);
+  b = hl_malloc(s, i + 1);
   if( !b ) return NULL;
   memcpy(b, v, i);
   return b;

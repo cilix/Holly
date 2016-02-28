@@ -11,4 +11,6 @@ sad
 --return 
 else true false
 "line1\n\tl\x61ne2"
+"hel\llo \
+there mo\7th\1\2\3erf\uucker"
 fi 
