@@ -143,18 +143,24 @@ pairlist ::=
   Name `:` expression |
   Name `:` expression `,` pairlist |
   nil
+
+functionstatement ::=
+  `fn` Name namelist block | 
+  `fn` Name namelist `->` expression 
   
 statement ::=
   ifstatement |
   whilestatement |
+  forstatement |
   `return` expression |
   `break` |
-  `let` Name assignment expression |
-  value assignment expression |        *value must not be a functioncall 
-  value                                *value must be a functioncall 
-                                       *just keep a flag in the 'access' function
-                                        keeping track of the last type parsed
-  
+  `let` Name [ assignment expression ] |
+  functionstatement |                 *sugar for assigning a lambda to a variable
+  value assignment expression |       *value must not be a functioncall 
+  value                               *value must be a functioncall 
+                                        but can not start with 'fn'.
+                                        Therefore IIFEs aren't allowed.
+
 statementlist ::=
   statement [ `;` ] statementlist | *semicolon is optional
   nil
@@ -163,29 +169,6 @@ start ::=
   statementlist
 
 
-  
-POSSIBLE GRAMMAR AMBIGUITIES
-
-1. Lack of semicolon issues
-
-x += 5
-
-return
-
-something()
-
-return will always parse the next parseable expression. The above 
-will be parsed as:
-
-return something()
-
-Another example:
-
-return 
-
-x += 2
-
-The above will trigger an error: 'unexpected +='.
 
 CODE SAMPLES
 
@@ -216,7 +199,18 @@ let add = fn x, y -> x + y
 
 let a = add(2, 3)
 
-if a > 4 {
-  let x = min(
+
+-- parsing a variable from a string (translated from c)
+hl_pname s, v {
+  let i = 0
+  let b = nil
+  while 
+    hl_isalpha(v[i]) or 
+    hl_isdigit(v[i]) or
+    v[i] == '_' {
+    i += 1
+  }
+  return slice(v, i)
 }
+
 
