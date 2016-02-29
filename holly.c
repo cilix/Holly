@@ -388,7 +388,7 @@ unsigned char hl_pesc( unsigned char* p, int* i ){
   return c;
 }
 
-unsigned char* hl_pstr( hlState_t* s, unsigned char* v, int l ){
+static unsigned char* pString( hlState_t* s, unsigned char* v, int l ){
   int i = 0, j = 0;
   unsigned char c, e;
   unsigned char* b = hl_malloc(s, l + 1);
@@ -405,7 +405,7 @@ unsigned char* hl_pstr( hlState_t* s, unsigned char* v, int l ){
   return b;
 }
 
-unsigned char* hl_pname( hlState_t* s, unsigned char* v ){
+static unsigned char* pName( hlState_t* s, unsigned char* v ){
   int i = 0;
   unsigned char* b;
   while(
@@ -490,7 +490,7 @@ void hl_pnext( hlState_t* s ){
         s->error = HL_LEXSTR_ERR;
         return;
       }
-      str = hl_pstr(s, p + x + 1, i - 1);
+      str = pString(s, p + x + 1, i - 1);
       if( str ){
         s->ctok.type = 59; /* string tok */
         s->ctok.data.data = str;
@@ -503,7 +503,7 @@ void hl_pnext( hlState_t* s ){
         unsigned char* str;
         int l = 0;
         s->ctok.type = 64; /* name tok */
-        str = hl_pname(s, p + x);
+        str = pName(s, p + x);
         if( str ){
           l = strlen((const char *)str);
           s->ctok.data.data = str;
