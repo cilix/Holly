@@ -25,67 +25,17 @@
 #include <stdio.h>
 #include <string.h>
 
-/*
- * System wide definitions
- */
+#include "holly.h"
 
-#define HL_PTR_SIZE 8 /* bytes in a word */
-
-#define hl_eabort(s) do { if( s->error ) return; } while( 0 )
-#define hl_eabortr(s, r) do { if( s->error ) return r; } while( 0 )
-
-/* error codes */
-#define HL_MALLOC_FAIL 1
-#define HL_LEXSTR_ERR  2
-
-const char* hlErrors[] = {
-  NULL,
-  "malloc failure",
-  "Lex error: incomplete string",
-};
-
-/* forward declaration */
-typedef struct _hlState_t hlState_t;
-
-void* hl_malloc( hlState_t*, int );
-
-/*
- * Hash Table
- * Quadratic Probing Hash Table
- */
- 
-typedef struct {
-  int      l; /* key length */
-  unsigned h; /* hash value */
-  union {
-    unsigned char  skey[HL_PTR_SIZE];
-    unsigned char* lkey;
-  } k;
-  void* v; /* value */
-} hlHashEl_t; 
-
-typedef struct {
-  int         s; /* table size */
-  unsigned    c; /* table count */
-  hlHashEl_t* t;
-  char        f; /* table full */
-  hlState_t*  state; /* compiler state */
-} hlHashTable_t;
-
-
-int hlhprimes[] = {
-  5, 11, 23, 47, 97, 197, 397, 797, 1597, 3203, 6421, 
-  12853, 25717, 51437, 102877, 205759, 411527, 823117, 
-  1646237, 3292489, 6584983, 13169977, 26339969, 52679969, 
-  105359939, 210719881, 421439783, 842879579, 1685759167
-};
-
-
-/* hash table api */
-hlHashTable_t hl_hinit( hlState_t*  );
-void          hl_hset( hlHashTable_t*, unsigned char*, int, void* );
-int           hl_hget( hlHashTable_t*, unsigned char*, int );
-void          hl_hdel( hlHashTable_t*, unsigned char*, int );
+void* hl_malloc(hlState_t* h, int s ){
+  void* buf;
+  if( !(buf = malloc(s)) ){
+     h->error = HL_MALLOC_FAIL;
+  } else {
+     memset(buf, 0, s);
+  }
+  return buf;
+}
 
 /* the maximum index in the primes array
  * this actually needs to be lowered substantially
@@ -225,82 +175,10 @@ void hl_hdel( hlHashTable_t* h, unsigned char* k, int l ){
 /*
  * end hash table
  */ 
-
-/*
- * Values and Types
- * Arithmetic functions are declared here as well as some primitive functions
- *   like array, string and object access and manipulation
- * Other functions belong in the stdlib via the embedding api
- */
- 
-#define hlObjType  1
-#define hlArrType  2
-#define hlStrType  3
-#define hlBoolType 4
-#define hlNumType  5
-
-typedef double            hlNum_t;
-typedef unsigned char     hlBool_t;
-typedef struct _hlValue_t hlValue_t;
-
-typedef struct {
-  int l;
-  union {
-    unsigned char  s[HL_PTR_SIZE]; 
-    unsigned char* l;
-  } str;
-} hlString_t;
-
-typedef struct {
-  /* maybe meta data */
-  hlHashTable_t h;
-} hlObject_t;
-
-typedef struct {
-  /* maybe meta data, probably not */
-  /* if definitely not, ditch the box */
-  hlValue_t* v; /* index 0 will contain length */
-} hlArray_t;
-
-struct _hlValue_t {
-  int t;
-  union {
-    hlString_t* s; /* objects larger than 8 bytes are references */
-    hlNum_t     n;
-    hlBool_t    b;
-    hlObject_t* o; 
-    hlArray_t   a;
-  } v;
-};
-
-hlValue_t hl_value_init( char type ){
-  hlValue_t v;
-  v.t = type;
-  return v;
-}
-
-/*
- * Token Data
- */
  
 /*
-types: String, Number, Object, Array, Boolean
-binary operators: | - + * ^ / % >> << & 
-assignment: |= -= += *= ^= /= %= >>= <<= &= =
-unary operator: ! ~ * -
-comparison: < > == != <= >= and or
-reserved symbols: \ { } [ ] : ( ) ; , " ' -- :: .. . ->
-other reserved words: let if else return while fn true false nil for in break
-*/
-
-typedef struct {
-  char type;
-  int  l;
-  union {
-    hlNum_t number;
-    unsigned char* data;
-  } data;
-} hlToken_t;
+ * Parser
+ */
 
 #define hl_ismatch(x, y, z) (!strncmp((const char *)x, (const char *)y, z))
 #define hl_isspace(x)       (x == ' ' || x == '\t' || x == '\n')
@@ -314,54 +192,6 @@ typedef struct {
   if( hl_isdigit(x) ) x = x - '0'; \
   else if( hl_ishex(x) ) x = 10 + (x - 'a'); \
 } while( 0 )
-
-const int hlTkCnt = 59;
-
-const char* hlTkns[] = {
-  "String", "Number", "Object", "Array", "Boolean",
-  "|=", "-=", "+=", "*=", "^=", "/=", "%=", ">>=", 
-  "<<=", "&=", "<=", ">=", "and", "or", "<<", ">>",
-  "\\", "{", "}", "[", "]", ":", "(", ")", ";", ","
-  "::", "..", ".", "->", "!", "~", "*", "|", "-", 
-  "+", "^", "/", "%", ">", "<", "&", "=", "let", 
-  "if", "else", "return", "while", "fn", "true", 
-  "false", "nil", "for", "in", "break",
-  "<string>", "<number>", "<object>", "<array>", 
-  "<boolean>", "<name>", "<eof>"
-};
-
-#define hlTokStringType 1
-#define hlTokNumberType 2
-#define hlTokObjectType 3
-#define hlTokArrayType  4
-#define hlTokBoolType   5
-
-
-/*
- * Compiler State
- */
-
-struct _hlState_t {
-  int            error;
-  int            ptr;
-  hlToken_t      ctok;
-  unsigned char* prog;
-};
- 
-
-void* hl_malloc(hlState_t* h, int s ){
-  void* buf;
-  if( !(buf = malloc(s)) ){
-     h->error = HL_MALLOC_FAIL;
-  } else {
-     memset(buf, 0, s);
-  }
-  return buf;
-}
- 
-/*
- * Parser
- */
 
 unsigned char hl_pesc( unsigned char* p, int* i ){
   unsigned char c = *p;
@@ -541,151 +371,4 @@ void hl_pnext( hlState_t* s ){
     } break;
   }
   s->ptr++;
-}
-
-/*
- * a bunch of tests for data structures 
- */
- 
-#include <math.h>
- 
-int isprime( unsigned n ){
-  int i, r;
-  if(  n < 2   ) return 0;
-  if(  n < 4   ) return 1;
-  if( !(n % 2) ) return 0;
-  r = sqrt(n);
-  for( i = 3; i <= r; i += 2 ){
-    if( !(n % i ) ) return 0;
-  }
-  return 1;
-} 
-
-void primelist( void ){
-  unsigned s = 2;
-  unsigned ptest;
-  unsigned prev;
-  unsigned p = 2;
-  int i = 0;
-  
-  printf("\nunsigned hlhprimes[] = {");
-  for( ; i < 29; i++ ){
-    ptest = s + 1;
-    prev = p;
-    for( ;; ){
-      p = ptest += 2;
-      if( p < (prev << 1) ) continue; 
-      if( isprime(p) )
-        break;
-    }
-    printf("%d", p);
-    if( i < 28 ) printf(", ");
-    s <<= 1;
-  }
-  printf("};\n\n");
-}
-
-#include <time.h>
-
-/* get word from file */
-unsigned char* getWord (FILE* f) {
-  unsigned char* buf = NULL;
-  int c = 0, i = 0, bufsize = 10;
-  buf = malloc(bufsize + 1);
-  memset(buf, 0, bufsize + 1);
-  while ((c = fgetc(f)) != '\n') {
-    if (c == EOF) return NULL;
-    if (i == bufsize)
-      buf = realloc(buf, (bufsize += 10) + 1);
-    buf[i++] = (unsigned char)c;
-  }
-  buf[i] = 0;
-  return buf;
-} 
-
-void loadWords (hlHashTable_t* root) {
-  FILE* in = fopen("../cuckoo/words.txt", "r");
-  unsigned char* word = NULL;
-  /*int i = 0, total = 0;*/
-  while ((word = getWord(in))) {
-    int l = strlen((char *)word);
-    hl_hset(root, word, l, (void*)word);
-  }/*
-  fclose(in);
-  
-  printf("inserted %d elements\n", root->c);
-  
-  in = fopen("../cuckoo/words.txt", "r");
-  while ((word = getWord(in))) {
-    int l = strlen((char *)word);
-    i = hl_hget(root, word, l);
-    if( i > -1 ){
-      total++;
-    }
-  }
-  printf("retrieved %d elements\n", total);
-  
-  fclose(in);
-  
-  in = fopen("../cuckoo/words.txt", "r");
-  while ((word = getWord(in))) {
-    int l = strlen((char *)word);
-    hl_hdel(root, word, l);
-  }
-  
-  fclose(in);
-  puts("deleted");
-  printf("remaining elements: %d\n", root->c);*/
-}
-
-void hashtest( void ){
-  hlState_t state;
-  double end, start;
-  hlHashTable_t table = hl_hinit(&state);
-
-  start = (float)clock()/CLOCKS_PER_SEC; 
-  loadWords(&table);
-  end = (float)clock()/CLOCKS_PER_SEC;
-    
-  printf("Inserted, retrieved, and deleted %d objects in %fs - Table size: %d\n", table.c, end - start, hlhprimes[table.s]);
-}
-
-unsigned char* readfile( const char* n ){
-  unsigned char *buf;
-  long fsize;
-  FILE *f = fopen(n, "rb");
-  fseek(f, 0, SEEK_END);
-  fsize = ftell(f);
-  fseek(f, 0, SEEK_SET);
-  buf = malloc(fsize + 1);
-  if( !fread(buf, fsize, 1, f) ){
-    fclose(f);
-    return NULL;
-  }
-  fclose(f);
-  buf[fsize] = 0;
-  return buf;
-}
-
-int main( int argc, char** argv ) {
-  if( argc > 1 ){
-    unsigned char* p = readfile(argv[1]);
-    hlState_t s;
-    s.error = 0;
-    s.prog = p;
-    s.ctok.type = -1;
-    hl_pnext(&s);
-    while( s.ctok.type > -1 ){
-      printf("%s\n", hlTkns[(int)s.ctok.type]);
-      if( s.ctok.type == 59 || s.ctok.type == 64 ) 
-        puts((const char *)(s.ctok.data.data));
-      if( s.ctok.type == 60 )
-        printf("%f\n", s.ctok.data.number);
-      hl_pnext(&s);
-    } 
-    if( s.error ){
-      puts(hlErrors[s.error]);
-    }
-  }
-  return 0;
 }
