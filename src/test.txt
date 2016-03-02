@@ -36,5 +36,7 @@ hl_pname s, v {
     v[i] == '_' {
     i += 1
   }
+  if i > 20
+    return ""
   return slice(v, i)
 }

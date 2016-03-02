@@ -58,6 +58,7 @@ unop ::=
 literal ::=
   Number |
   Boolean |
+  String |
   Nil     
 
 expression ::=
@@ -65,17 +66,17 @@ expression ::=
   value |
   unop expression |
   expression binop expression |
-  `(` expression `)` 
+  `(` expression `)` valuesuffix
   
 value ::=
-  object [ access ] |
-  array [ access ] |
-  Name valuesuffix |
-  lambda [ functioncallsuffix ]
+  object |
+  array |
+  lambda |
+  Name valuesuffix 
   
 access ::=
   `.` Name valuesuffix |
-  `[` expressions `]` valuesuffix |  
+  `[` expression `]` valuesuffix |  
   
 functioncallsuffix ::=
   `(` expressionlist `)` valuesuffix
@@ -149,6 +150,10 @@ pairlist ::=
 functionstatement ::=
   `fn` Name namelist block | 
   `fn` Name namelist `->` expression 
+
+functioncall ::=
+  Name valuesuffix                    *value must be a functioncall 
+  `(` expression `)` valuesuffix      *this too
   
 statement ::=
   ifstatement |
@@ -159,9 +164,8 @@ statement ::=
   `let` Name [ assignment expression ] |
   functionstatement |                 *sugar for assigning a lambda to a variable
   value assignment expression |       *value must not be a functioncall 
-  value                               *value must be a functioncall 
-                                        but can not start with 'fn'.
-                                        Therefore IIFEs aren't allowed.
+  functioncall
+                                        
 
 statementlist ::=
   statement [ `;` ] statementlist | *semicolon is optional
@@ -194,9 +198,6 @@ let bob = Person('bob', 25)
 
 bob.speak(bob)
 
--- or, sugar for implicitly passing the object as the first value
-bob::speak()
-
 let add = fn x, y -> x + y
 
 let a = add(2, 3)
@@ -208,7 +209,7 @@ let name = fn s, v {
   let b = nil
   while 
     hl_isalpha(v[i]) or 
-    hl_isdigit(v[i]) or
+    hl_isdigit(v[i]) o
     v[i] == '_' {
     i += 1
   }
