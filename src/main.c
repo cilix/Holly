@@ -131,11 +131,11 @@ int main( int argc, char** argv ) {
     s.prog = p;
     s.ctok.type = -1;
     hl_pnext(&s);
-    while( s.ctok.type > -1 ){
+    while( s.ctok.type != tk_eof ){
       printf("%s\n", hlTkns[(int)s.ctok.type]);
-      if( s.ctok.type == 59 || s.ctok.type == 64 ) 
+      if( s.ctok.type == tk_string || s.ctok.type == tk_name ) 
         puts((const char *)(s.ctok.data.data));
-      if( s.ctok.type == 60 )
+      if( s.ctok.type == tk_number )
         printf("%f\n", s.ctok.data.number);
       hl_pnext(&s);
     } 

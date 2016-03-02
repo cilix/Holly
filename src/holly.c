@@ -193,7 +193,7 @@ void hl_hdel( hlHashTable_t* h, unsigned char* k, int l ){
   else if( hl_ishex(x) ) x = 10 + (x - 'a'); \
 } while( 0 )
 
-unsigned char hl_pesc( unsigned char* p, int* i ){
+static unsigned char pEsc( unsigned char* p, int* i ){
   unsigned char c = *p;
   switch( c ){
     case 'a': c = '\a'; break;
@@ -226,7 +226,7 @@ static unsigned char* pString( hlState_t* s, unsigned char* v, int l ){
   while( i < l ){
     c = v[i++];
     if( c == '\\' ){
-      e = hl_pesc(v + i, &i);
+      e = pEsc(v + i, &i);
       if( e ) b[j++] = e;
     } else {
       b[j++] = c;
@@ -249,7 +249,7 @@ static unsigned char* pName( hlState_t* s, unsigned char* v ){
   return b;
 }
 
-int hl_ppow( int b, int e ){
+static int pow( int b, int e ){
   int r = 1;
   while( e ){
     if( e & 1 ) r *= b;
@@ -265,7 +265,7 @@ void hl_pnext( hlState_t* s ){
   hl_eabort(s);
   /* possibly free previous token data here 
      probably not, so we can pass the data to the vm */
-  s->ctok.type = -1;
+  s->ctok.type = tk_eof;
   while( hl_isspace(p[s->ptr]) ) s->ptr++; 
   /* comments 
      inline comments start with -- 
@@ -285,7 +285,7 @@ void hl_pnext( hlState_t* s ){
   }
   x = s->ptr;
   if( !p[x] ){
-    s->ctok.type = -1;
+    s->ctok.type = tk_eof;
     return;
   }
   for( i = 0; i < hlTkCnt; i++ ){
@@ -293,9 +293,9 @@ void hl_pnext( hlState_t* s ){
     /* make sure the string comparison doesn't go off 
        the end of the buffer */
     if( hl_ismatch(p + x, hlTkns[i], l) ){
-      if( i == 53 || i == 54 ){
-        s->ctok.type = 63; /* boolean */
-        s->ctok.data.number = (i == 53); /* i == true */
+      if( i == tk_true || i == tk_false ){
+        s->ctok.type = tk_boolean; 
+        s->ctok.data.number = (i == tk_true); 
       } else {
         s->ctok.type = i;
       }
@@ -305,7 +305,7 @@ void hl_pnext( hlState_t* s ){
   }
   switch( p[x] ){
     case 0:
-      s->ctok.type = -1;
+      s->ctok.type = 0;
       return;
     case '\'':
     case '"': {
@@ -322,7 +322,7 @@ void hl_pnext( hlState_t* s ){
       }
       str = pString(s, p + x + 1, i - 1);
       if( str ){
-        s->ctok.type = 59; /* string tok */
+        s->ctok.type = tk_str; 
         s->ctok.data.data = str;
         s->ptr += (i + 1);
       }
@@ -332,7 +332,7 @@ void hl_pnext( hlState_t* s ){
       if( hl_isalpha(p[x]) ){
         unsigned char* str;
         int l = 0;
-        s->ctok.type = 64; /* name tok */
+        s->ctok.type = tk_name; /* name tok */
         str = pName(s, p + x);
         if( str ){
           l = strlen((const char *)str);
@@ -360,15 +360,42 @@ void hl_pnext( hlState_t* s ){
           i++;  
         }
         if( dec ){
-          dec /= hl_ppow(10, dc);
+          dec /= pow(10, dc);
           r += dec;
         }
         s->ctok.data.number = r;
         s->ptr += i + 1;
-        s->ctok.type = 60; /* number */
+        s->ctok.type = tk_number; 
         return;
       }
     } break;
   }
   s->ptr++;
+}
+
+/*
+expression ::=
+  literal |
+  value |
+  unop expression |
+  expression binop expression |
+  `(` expression `)` 
+*/
+
+static void expression( hlState_t* );
+
+static int literal( hlState_t* s ){
+  token tok = s->ctok.type;
+
+  return 
+    tok == tk_number  ||
+    tok == tk_string  ||
+    tok == tk_boolean ||
+    tok == tk_nil;
+}
+
+static void expression( hlState_t* s ){
+  hl_eabort(s);
+  if( literal(s) ) return;
+  return;
 }
