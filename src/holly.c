@@ -391,6 +391,41 @@ static int unop( hlState_t* s ){
     tok == tk_ast;
 }
 
+static int assignment( hlState_t* s ){
+  token tok = s->ctok.type;
+  return tok == tk_oeq ||
+    tok == tk_meq      ||
+    tok == tk_peq      ||
+    tok == tk_teq      ||
+    tok == tk_xeq      ||
+    tok == tk_deq      ||
+    tok == tk_modeq    ||
+    tok == tk_rseq     ||
+    tok == tk_lseq     ||
+    tok == tk_aeq      ||
+    tok == tk_leq      ||
+    tok == tk_eq       ||
+    tok == tk_geq;
+}
+
+static int binop( hlState_t* s ){
+  token tok = s->ctok.type;
+  return tok == tk_and ||
+    tok == tk_or       ||
+    tok == tk_ls       ||
+    tok == tk_rs       ||
+    tok == tk_lor      ||
+    tok == tk_sub      ||
+    tok == tk_add      ||
+    tok == tk_xor      ||
+    tok == tk_div      ||
+    tok == tk_mod      ||
+    tok == tk_gt       ||
+    tok == tk_lt       ||
+    tok == tk_land     ||
+    tok == tk_iseq;
+}
+
 /*
 expression ::=
   literal |
@@ -402,6 +437,10 @@ expression ::=
 
 static void expression( hlState_t* s ){
   hl_eabort(s);
-  if( literal(s) ) return;
+  if( literal(s) ) {
+    hl_pnext(s);
+
+    return;
+  }
   return;
 }
