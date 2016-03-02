@@ -160,7 +160,7 @@ typedef enum {
   tk_arrow,
   tk_not,
   tk_lnot,
-  tk_mult,
+  tk_ast,
   tk_lor,
   tk_sub,
   tk_add,
