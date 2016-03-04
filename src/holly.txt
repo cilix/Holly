@@ -74,16 +74,10 @@ value ::=
   lambda |
   Name valuesuffix 
   
-access ::=
+valuesuffix ::=
   `.` Name valuesuffix |
   `[` expression `]` valuesuffix |  
-  
-functioncallsuffix ::=
-  `(` expressionlist `)` valuesuffix
-  
-valuesuffix ::=
-  access |
-  functioncallsuffix |
+  `(` expressionlist `)` valuesuffix |
   nil
 
 block ::=
@@ -121,11 +115,12 @@ elsestatement ::=
   nil
   
 whilestatement ::=
-  `while` expression block 
+  `while` expression block |
+  `while` expression statement
   
 forstatement ::=
   `for` Name [ `,` Name ] `in` iterable block |         
-  `for` Name [ `,` Name ] `in` iterable `:` statement 
+  `for` Name [ `,` Name ] `in` iterable statement 
   
 iterable ::=
   spread |
@@ -162,13 +157,12 @@ statement ::=
   `return` expression |
   `break` |
   `let` Name [ assignment expression ] |
-  functionstatement |                 *sugar for assigning a lambda to a variable
-  value assignment expression |       *value must not be a functioncall 
+  functionstatement |                         *sugar for assigning a lambda to a variable
+  Name valuesuffix  assignment expression | 
   functioncall
                                         
-
 statementlist ::=
-  statement [ `;` ] statementlist | *semicolon is optional
+  statement statementlist | 
   nil
   
 start ::=
