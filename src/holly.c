@@ -375,14 +375,6 @@ void hl_pnext( hlState_t* s ){
 
 static void expression( hlState_t* );
 
-static int literal( hlState_t* s ){
-  token tok = s->ctok.type;
-  return tok == tk_number  ||
-    tok == tk_string       ||
-    tok == tk_boolean      ||
-    tok == tk_nil;
-}
-
 static int unop( hlState_t* s ){
   token tok = s->ctok.type;
   return tok == tk_not  ||
@@ -437,10 +429,17 @@ expression ::=
 
 static void expression( hlState_t* s ){
   hl_eabort(s);
-  if( literal(s) ) {
+  if( unop(s) ){
     hl_pnext(s);
-
+    expression(s);
     return;
   }
-  return;
+  if( s->ctok.type == tk_lp ){
+    hl_pnext(s);
+    expression(s);
+    /* expect rp */
+  }
+  if( binop(s) ){
+    expression(s);
+  }
 }
