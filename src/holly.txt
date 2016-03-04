@@ -196,7 +196,6 @@ let add = fn x, y -> x + y
 
 let a = add(2, 3)
 
-
 -- parsing a variable from a string (translated from c)
 let name = fn v {
   let i = 0

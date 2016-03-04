@@ -130,18 +130,6 @@ int main( int argc, char** argv ) {
     s.error = 0;
     s.prog = p;
     s.ctok.type = -1;
-    hl_pnext(&s);
-    while( s.ctok.type != tk_eof ){
-      printf("%s\n", hlTkns[(int)s.ctok.type]);
-      if( s.ctok.type == tk_string || s.ctok.type == tk_name ) 
-        puts((const char *)(s.ctok.data.data));
-      if( s.ctok.type == tk_number )
-        printf("%f\n", s.ctok.data.number);
-      hl_pnext(&s);
-    } 
-    if( s.error ){
-      puts(hlErrors[s.error]);
-    }
   }
   return 0;
 }

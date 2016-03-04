@@ -13,17 +13,7 @@
 
 #define hl_eabort(s) do { if( s->error ) return; } while( 0 )
 #define hl_eabortr(s, r) do { if( s->error ) return r; } while( 0 )
-
-/* error codes */
-#define HL_MALLOC_FAIL 1
-#define HL_LEXSTR_ERR  2
-
-static const char* hlErrors[] = {
-  NULL,
-  "malloc failure",
-  "Lex error: incomplete string",
-};
-
+ 
 /* forward declaration */
 typedef struct _hlState_t hlState_t;
 
@@ -122,97 +112,14 @@ reserved symbols: \ { } [ ] : ( ) ; , " ' -- :: .. . ->
 other reserved words: let if else return while fn true false nil for in break
 */
 
-typedef enum {
-  tk_str,
-  tk_num, 
-  tk_object,
-  tk_array,
-  tk_bool,
-  tk_oeq,
-  tk_meq,
-  tk_peq,
-  tk_teq,
-  tk_xeq,
-  tk_deq,
-  tk_modeq,
-  tk_rseq,
-  tk_lseq,
-  tk_aeq,
-  tk_leq,
-  tk_geq,
-  tk_and,
-  tk_or,
-  tk_ls,
-  tk_rs,
-  tk_esc,
-  tk_lbrc,
-  tk_rbrc,
-  tk_lbrk,
-  tk_rbrk,
-  tk_col,
-  tk_lp,
-  tk_rp,
-  tk_sem,
-  tk_com,
-  tk_dcol,
-  tk_spr,
-  tk_per,
-  tk_arrow,
-  tk_not,
-  tk_lnot,
-  tk_ast,
-  tk_lor,
-  tk_sub,
-  tk_add,
-  tk_xor,
-  tk_div,
-  tk_mod,
-  tk_gt,
-  tk_lt,
-  tk_land,
-  tk_iseq,
-  tk_eq,
-  tk_let,
-  tk_if,
-  tk_else,
-  tk_return,
-  tk_while,
-  tk_fn,
-  tk_true,
-  tk_false,
-  tk_nil,
-  tk_for,
-  tk_in,
-  tk_break,
-  tk_string,
-  tk_number,
-  tk_boolean,
-  tk_name,
-  tk_eof
-} token;
-
 typedef struct {
-  token type;
+  int type;
   int  l;
   union {
     hlNum_t number;
     unsigned char* data;
   } data;
 } hlToken_t;
-
-static const int hlTkCnt = 60;
-
-static const char* hlTkns[] = {
-  "String", "Number", "Object", "Array", "Boolean",
-  "|=", "-=", "+=", "*=", "^=", "/=", "%=", ">>=", 
-  "<<=", "&=", "<=", ">=", "and", "or", "<<", ">>",
-  "\\", "{", "}", "[", "]", ":", "(", ")", ";", ",",
-  "::", "..", ".", "->", "!", "~", "*", "|", "-", 
-  "+", "^", "/", "%", ">", "<", "&", "==", "=", "let", 
-  "if", "else", "return", "while", "fn", "true", 
-  "false", "nil", "for", "in", "break",
-  "<string>", "<number>", "<boolean>", "<name>", "<eof>"
-};
 
 /*
  * Compiler State

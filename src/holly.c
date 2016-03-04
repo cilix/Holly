@@ -27,12 +27,19 @@
 
 #include "holly.h"
 
+static void hl_error( hlState_t* s, const char* e, const char* a ){
+  /* display line number also */
+  if( a ) fprintf(stderr, "error: %s %s\n", e, a);
+  else fprintf(stderr, "error: %s\n", e);
+  s->error = 1;
+}
+
 void* hl_malloc(hlState_t* h, int s ){
   void* buf;
   if( !(buf = malloc(s)) ){
-     h->error = HL_MALLOC_FAIL;
+    hl_error(h, "malloc failuer\n", NULL);
   } else {
-     memset(buf, 0, s);
+    memset(buf, 0, s);
   }
   return buf;
 }
@@ -180,6 +187,34 @@ void hl_hdel( hlHashTable_t* h, unsigned char* k, int l ){
  * Parser
  */
 
+typedef enum {
+  tk_str,   tk_num,    tk_object, tk_array,   tk_bool,   tk_oeq,
+  tk_meq,   tk_peq,    tk_teq,    tk_xeq,     tk_deq,    tk_modeq,
+  tk_rseq,  tk_lseq,   tk_aeq,    tk_leq,     tk_geq,    tk_land,
+  tk_lor,   tk_ls,     tk_rs,     tk_esc,     tk_lbrc,   tk_rbrc,
+  tk_lbrk,  tk_rbrk,   tk_col,    tk_lp,      tk_rp,     tk_sem,
+  tk_com,   tk_dcol,   tk_spr,    tk_per,     tk_arrow,  tk_not,
+  tk_lnot,  tk_ast,    tk_bor,    tk_sub,     tk_add,    tk_xor,
+  tk_div,   tk_mod,    tk_gt,     tk_lt,      tk_band,   tk_iseq,
+  tk_eq,    tk_let,    tk_if,     tk_else,    tk_return, tk_while,
+  tk_fn,    tk_true,   tk_false,  tk_nil,     tk_for,    tk_in,
+  tk_break, tk_string, tk_number, tk_boolean, tk_name,   tk_eof
+} token;
+
+static const int hlTkCnt = 60;
+
+static const char* hlTkns[] = {
+  "String", "Number", "Object", "Array", "Boolean",
+  "|=", "-=", "+=", "*=", "^=", "/=", "%=", ">>=", 
+  "<<=", "&=", "<=", ">=", "and", "or", "<<", ">>",
+  "\\", "{", "}", "[", "]", ":", "(", ")", ";", ",",
+  "::", "..", ".", "->", "!", "~", "*", "|", "-", 
+  "+", "^", "/", "%", ">", "<", "&", "==", "=", "let", 
+  "if", "else", "return", "while", "fn", "true", 
+  "false", "nil", "for", "in", "break",
+  "<string>", "<number>", "<boolean>", "<name>", "<eof>"
+};
+
 #define hl_ismatch(x, y, z) (!strncmp((const char *)x, (const char *)y, z))
 #define hl_isspace(x)       (x == ' ' || x == '\t' || x == '\n')
 #define hl_isdigit(x)       (x >= '0' && x <= '9')
@@ -259,7 +294,7 @@ static int pow( int b, int e ){
   return r;
 }
 
-void hl_pnext( hlState_t* s ){
+static void next( hlState_t* s ){
   int i, x;
   unsigned char* p = s->prog;
   hl_eabort(s);
@@ -288,6 +323,8 @@ void hl_pnext( hlState_t* s ){
     s->ctok.type = tk_eof;
     return;
   }
+  /* XXX : rewrite this part completely 
+     check for symbols and reserved words individually */
   for( i = 0; i < hlTkCnt; i++ ){
     int l = strlen(hlTkns[i]);
     /* make sure the string comparison doesn't go off 
@@ -317,7 +354,7 @@ void hl_pnext( hlState_t* s ){
         (c != end || p[x + i - 1] == '\\')
       ) i++;
       if( !c ){
-        s->error = HL_LEXSTR_ERR;
+        s->error = 1;
         return;
       }
       str = pString(s, p + x + 1, i - 1);
@@ -335,6 +372,7 @@ void hl_pnext( hlState_t* s ){
         s->ctok.type = tk_name; /* name tok */
         str = pName(s, p + x);
         if( str ){
+          /* check for reserved words here */
           l = strlen((const char *)str);
           s->ctok.data.data = str;
           s->ptr += l;
@@ -373,13 +411,37 @@ void hl_pnext( hlState_t* s ){
   s->ptr++;
 }
 
+static int peek( hlState_t* s, token t ){
+  hl_eabortr(s, 0);
+  return s->ctok.type == t;
+}
+
+static int accept( hlState_t* s, token t ){
+  hl_eabortr(s, 0);
+  if( s->ctok.type == t ){
+    next(s);
+    return 1;
+  }
+  return 0;
+}
+
+static int expect( hlState_t* s, token t ){
+  hl_eabortr(s, 0);
+  if( s->ctok.type == t ){
+    next(s);
+    return 1;
+  }
+  hl_error(s, "unexpected token", hlTkns[t]);
+  return 0;
+}
+
 static void expression( hlState_t* );
 
 static int unop( hlState_t* s ){
   token tok = s->ctok.type;
   return tok == tk_not  ||
     tok == tk_lnot      ||
-    tok == tk_land      ||
+    tok == tk_band      ||
     tok == tk_ast;
 }
 
@@ -402,11 +464,11 @@ static int assignment( hlState_t* s ){
 
 static int binop( hlState_t* s ){
   token tok = s->ctok.type;
-  return tok == tk_and ||
-    tok == tk_or       ||
+  return tok == tk_land ||
+    tok == tk_lor       ||
     tok == tk_ls       ||
     tok == tk_rs       ||
-    tok == tk_lor      ||
+    tok == tk_bor      ||
     tok == tk_sub      ||
     tok == tk_add      ||
     tok == tk_xor      ||
@@ -414,7 +476,7 @@ static int binop( hlState_t* s ){
     tok == tk_mod      ||
     tok == tk_gt       ||
     tok == tk_lt       ||
-    tok == tk_land     ||
+    tok == tk_band     ||
     tok == tk_iseq;
 }
 
@@ -428,17 +490,32 @@ expression ::=
 */
 
 static void expression( hlState_t* s ){
+  /* this doesn't handle precedence yet, 
+     and everything is right assosiative */
   hl_eabort(s);
-  if( unop(s) ){
-    hl_pnext(s);
+  if( accept(s, tk_string) ){
+    next(s);
+  } else if( accept(s, tk_number) ){
+    next(s);
+  } else if( accept(s, tk_boolean) ){
+    next(s);
+  } else if( accept(s, tk_nil) ){
+    next(s);
+  } else if( unop(s) ){
+    next(s);
     expression(s);
+  } else if( accept(s, tk_lp) ){
+    next(s);
+    expression(s);
+    expect(s, tk_rp);
+  } else if( accept(s, tk_lbrc) ){
+    /* object definition */
+    return;
+  } else if( accept(s, tk_lbrk) ){
+    /* array definition */
     return;
   }
-  if( s->ctok.type == tk_lp ){
-    hl_pnext(s);
-    expression(s);
-    /* expect rp */
-  }
+  /*value(s);*/
   if( binop(s) ){
     expression(s);
   }
