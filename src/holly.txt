@@ -145,10 +145,6 @@ pairlist ::=
 functionstatement ::=
   `fn` Name namelist block | 
   `fn` Name namelist `->` expression 
-
-functioncall ::=
-  Name valuesuffix                    *value must be a functioncall 
-  `(` expression `)` valuesuffix      *this too
   
 statement ::=
   ifstatement |
@@ -158,8 +154,7 @@ statement ::=
   `break` |
   `let` Name [ assignment expression ] |
   functionstatement |                         *sugar for assigning a lambda to a variable
-  Name valuesuffix  assignment expression | 
-  functioncall
+  value [ assignment expression ]             *if not an assignment, then must be a functioncall
                                         
 statementlist ::=
   statement statementlist | 

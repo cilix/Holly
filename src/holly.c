@@ -300,6 +300,7 @@ static void next( hlState_t* s ){
   hl_eabort(s);
   /* possibly free previous token data here 
      probably not, so we can pass the data to the vm */
+  printf("token: %s\n", hlTkns[s->ctok.type]);
   s->ctok.type = tk_eof;
   while( hl_isspace(p[s->ptr]) ) s->ptr++; 
   /* comments 
@@ -360,7 +361,7 @@ static void next( hlState_t* s ){
       }
       str = pString(s, p + x + 1, i - 1);
       if( str ){
-        s->ctok.type = tk_str; 
+        s->ctok.type = tk_string; 
         s->ctok.data.data = str;
         s->ptr += (i + 1);
       }
@@ -409,7 +410,8 @@ static void next( hlState_t* s ){
       }
     } break;
   }
-  s->ptr++;
+  s->error = 1;
+  fprintf(stderr, "unexpected %c\n", p[x]);
 }
 
 static int peek( hlState_t* s, token t ){
@@ -432,7 +434,7 @@ static int expect( hlState_t* s, token t ){
     next(s);
     return 1;
   }
-  hl_error(s, "unexpected token", hlTkns[t]);
+  hl_error(s, "unexpected token", hlTkns[s->ctok.type]);
   return 0;
 }
 
@@ -496,9 +498,9 @@ block ::=
 
 static void block( hlState_t* s ){
   hl_eabort(s);
-  expect(s, tk_lbrk);
+  expect(s, tk_lbrc);
   statementlist(s);
-  expect(s, tk_rbrk);
+  expect(s, tk_rbrc);
 }
 
 /*
@@ -508,10 +510,11 @@ expressionlist ::=
 */
 
 static void expressionlist( hlState_t* s ){
+expression_list:
   hl_eabort(s);
   expression(s);
   if( accept(s, tk_com) ){
-    expressionlist(s);
+    goto expression_list;
   }
 }
 
@@ -562,12 +565,13 @@ pairlist ::=
 */
 
 static void pairlist( hlState_t* s ){
+pair_list:
   hl_eabort(s);
   if( accept(s, tk_name) ){
     expect(s, tk_col);
     expression(s);
     if( accept(s, tk_com) ){
-      pairlist(s);
+      goto pair_list;
     }
   }
 }
@@ -599,10 +603,11 @@ namelist ::=
 */
 
 static void namelist( hlState_t* s ){
+name_list:
   hl_eabort(s);
   name(s);
   if( accept(s, tk_com) ){
-    namelist(s);
+    goto name_list;
   }
 }
 
@@ -660,26 +665,19 @@ static void expression( hlState_t* s ){
      and everything is right assosiative */
   hl_eabort(s);
   if( accept(s, tk_string) ){
-    next(s);
+    /* emit */
   } else if( accept(s, tk_number) ){
-    next(s);
+    /* emit */
   } else if( accept(s, tk_boolean) ){
-    next(s);
+    /* emit */
   } else if( accept(s, tk_nil) ){
-    next(s);
+    /* emit */
   } else if( unop(s) ){
     next(s);
     expression(s);
   } else if( accept(s, tk_lp) ){
-    next(s);
     expression(s);
     expect(s, tk_rp);
-  } else if( peek(s, tk_lbrc) ){
-    object(s);
-    return;
-  } else if( peek(s, tk_lbrk) ){
-    array(s);
-    return;
   } else {
     value(s);
   }
@@ -698,17 +696,19 @@ valuesuffix ::=
 */
 
 static void valuesuffix( hlState_t* s ){
+value_suffix:
+  hl_eabort(s);
   if( accept(s, tk_per) ){
     expect(s, tk_name);
-    valuesuffix(s);
+    goto value_suffix;
   } else if( accept(s, tk_lbrk) ){
     expression(s);
     expect(s, tk_rbrk);
-    valuesuffix(s);
-  } else if( accept(s, tk_lbrc) ){
+    goto value_suffix;
+  } else if( accept(s, tk_lp) ){
     expressionlist(s);
-    expect(s, tk_rbrc);
-    valuesuffix(s);
+    expect(s, tk_rp);
+    goto value_suffix;
   }
 }
 
@@ -809,23 +809,6 @@ static void functionstatement( hlState_t* s ){
 }
 
 /*
-functioncall ::=
-  Name valuesuffix                    *value must be a functioncall 
-  `(` expression `)` valuesuffix      *this too
-*/
-
-static void functioncall( hlState_t* s ){
-  hl_eabort(s);
-  if( accept(s, tk_lp) ){
-    expression(s);
-    expect(s, tk_rp);
-  } else {
-    expect(s, tk_name);
-  }
-  valuesuffix(s);
-}
-
-/*
 statement ::=
   ifstatement |
   whilestatement |
@@ -858,15 +841,16 @@ static void statement( hlState_t* s ){
     }
   } else if( accept(s, tk_fn) ){
     functionstatement(s);
-  } else if( accept(s, tk_name) ){
-    valuesuffix(s);
+  } else if( peek(s, tk_name) ){
+    value(s);
     if( assignment(s) ){
+      next(s);
       expression(s);
     } else {
-      hl_error(s, "expected", "assignment");
+      /* must be a functioncall */
     }
   } else {
-    functioncall(s);
+    hl_error(s, "unexpected", hlTkns[s->ctok.type]);
   }
 }
 
@@ -877,12 +861,13 @@ statementlist ::=
 */
 
 static void statementlist( hlState_t* s ){
+statement_list:
   hl_eabort(s);
   if( accept(s, tk_eof) || accept(s, tk_rbrc) ){
     return;
   }
   statement(s);
-  statementlist(s);
+  goto statement_list;
 }
 
 /*

@@ -14,19 +14,14 @@ let Person = fn name, age ->
     speak: fn self -> 
       print('hello, my name is ' + self.name) }
 
-let bob = Person('bob', 25)
+let bob = Person('bob')
 
 bob.speak(bob)
 
--- or, sugar for implicitly passing the object as the first value
-bob::speak()
-
 let add = fn x, y -> x + y
 
-let a = add(2, 3)
+let a = add(2)
 
-
--- parsing a variable from a string (translated from c)
 hl_pname s, v {
   let i = 0
   let b = nil
@@ -38,5 +33,5 @@ hl_pname s, v {
   }
   if i > 20
     return ""
-  return slice(v, i)
+  return slice(v)
 }
