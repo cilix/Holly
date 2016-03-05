@@ -344,6 +344,7 @@ static void next( hlState_t* s ){
     case 0:
       s->ctok.type = 0;
       return;
+    /* check for symbols here */
     case '\'':
     case '"': {
       int i = 1;
@@ -435,13 +436,21 @@ static int expect( hlState_t* s, token t ){
   return 0;
 }
 
+static void namelist( hlState_t* );
+static void expressionlist( hlState_t* );
+static void pairlist( hlState_t* );
 static void expression( hlState_t* );
+static void ifstatement( hlState_t* );
+static void elsestatement( hlState_t* );
+static void statementlist( hlState_t* );
+static void valuesuffix( hlState_t* );
+static void statement( hlState_t* );
 
 static int unop( hlState_t* s ){
   token tok = s->ctok.type;
-  return tok == tk_not  ||
-    tok == tk_lnot      ||
-    tok == tk_band      ||
+  return tok == tk_not ||
+    tok == tk_lnot     ||
+    tok == tk_band     ||
     tok == tk_ast;
 }
 
@@ -466,18 +475,175 @@ static int binop( hlState_t* s ){
   token tok = s->ctok.type;
   return tok == tk_land ||
     tok == tk_lor       ||
-    tok == tk_ls       ||
-    tok == tk_rs       ||
-    tok == tk_bor      ||
-    tok == tk_sub      ||
-    tok == tk_add      ||
-    tok == tk_xor      ||
-    tok == tk_div      ||
-    tok == tk_mod      ||
-    tok == tk_gt       ||
-    tok == tk_lt       ||
-    tok == tk_band     ||
+    tok == tk_ls        ||
+    tok == tk_rs        ||
+    tok == tk_bor       ||
+    tok == tk_sub       ||
+    tok == tk_add       ||
+    tok == tk_xor       ||
+    tok == tk_div       ||
+    tok == tk_mod       ||
+    tok == tk_gt        ||
+    tok == tk_lt        ||
+    tok == tk_band      ||
     tok == tk_iseq;
+}
+
+/*
+block ::=
+  `{` statementlist `}`
+*/
+
+static void block( hlState_t* s ){
+  hl_eabort(s);
+  expect(s, tk_lbrk);
+  statementlist(s);
+  expect(s, tk_rbrk);
+}
+
+/*
+expressionlist ::=
+  expression |
+  expression `,` expressionlist 
+*/
+
+static void expressionlist( hlState_t* s ){
+  hl_eabort(s);
+  expression(s);
+  if( accept(s, tk_com) ){
+    expressionlist(s);
+  }
+}
+
+/*
+spread ::=
+  Number `..` Number  
+*/
+
+static void spread( hlState_t* s ){
+  hl_eabort(s);
+  expect(s, tk_number);
+  expect(s, tk_spr);
+  expect(s, tk_number);
+}
+
+/*
+object ::=
+  `{` pairlist `}`
+*/
+
+static void object( hlState_t* s ){
+  hl_eabort(s);
+  expect(s, tk_lbrc);
+  pairlist(s);
+  expect(s, tk_rbrc);
+}
+
+/*
+array ::=
+  `[` expressionlist `]` | `[` nil `]`
+*/
+
+static void array( hlState_t* s ){
+  hl_eabort(s);
+  expect(s, tk_lbrk);
+  if( accept(s, tk_rbrk) ){
+    return;
+  }
+  expressionlist(s);
+  expect(s, tk_rbrk);
+}
+
+/*
+pairlist ::=
+  Name `:` expression |
+  Name `:` expression `,` pairlist |
+  nil
+*/
+
+static void pairlist( hlState_t* s ){
+  hl_eabort(s);
+  if( accept(s, tk_name) ){
+    expect(s, tk_col);
+    expression(s);
+    if( accept(s, tk_com) ){
+      pairlist(s);
+    }
+  }
+}
+
+/*
+name ::= 
+  Name |
+  Name typehint
+*/
+
+static void name( hlState_t* s ){
+  hl_eabort(s);
+  expect(s, tk_name);
+  if( accept(s, tk_col) ){
+    accept(s, tk_str)    ||   
+    accept(s, tk_num)    ||
+    accept(s, tk_object) ||
+    accept(s, tk_array)  ||
+    expect(s, tk_bool);
+  };
+}
+
+
+/*
+namelist ::=
+  name |
+  name `,` namelist |
+  nil
+*/
+
+static void namelist( hlState_t* s ){
+  hl_eabort(s);
+  name(s);
+  if( accept(s, tk_com) ){
+    namelist(s);
+  }
+}
+
+/*
+lambda ::=
+  `fn` namelist block | 
+  `fn` namelist `->` expression 
+*/
+
+static void lambda( hlState_t* s ){
+  hl_eabort(s);
+  expect(s, tk_fn);
+  namelist(s);
+  if( accept(s, tk_arrow) ){
+    expression(s);
+  } else {
+    block(s);
+  }
+}
+
+
+/*
+value ::=
+  object |
+  array |
+  lambda |
+  Name valuesuffix 
+*/
+
+static void value( hlState_t* s ){
+  hl_eabort(s);
+  if( peek(s, tk_lbrc) ){
+    object(s);
+  } else if( peek(s, tk_lbrk) ){
+    array(s);
+  } else if( peek(s, tk_fn) ){
+    lambda(s);
+  } else {
+    expect(s, tk_name);
+    valuesuffix(s);
+  }
 }
 
 /*
@@ -508,15 +674,224 @@ static void expression( hlState_t* s ){
     next(s);
     expression(s);
     expect(s, tk_rp);
-  } else if( accept(s, tk_lbrc) ){
-    /* object definition */
+  } else if( peek(s, tk_lbrc) ){
+    object(s);
     return;
-  } else if( accept(s, tk_lbrk) ){
-    /* array definition */
+  } else if( peek(s, tk_lbrk) ){
+    array(s);
     return;
+  } else {
+    value(s);
   }
-  /*value(s);*/
   if( binop(s) ){
+    next(s);
     expression(s);
   }
+}
+
+/*
+valuesuffix ::=
+  `.` Name valuesuffix |
+  `[` expression `]` valuesuffix |  
+  `(` expressionlist `)` valuesuffix |
+  nil
+*/
+
+static void valuesuffix( hlState_t* s ){
+  if( accept(s, tk_per) ){
+    expect(s, tk_name);
+    valuesuffix(s);
+  } else if( accept(s, tk_lbrk) ){
+    expression(s);
+    expect(s, tk_rbrk);
+    valuesuffix(s);
+  } else if( accept(s, tk_lbrc) ){
+    expressionlist(s);
+    expect(s, tk_rbrc);
+    valuesuffix(s);
+  }
+}
+
+/*
+ifstatement ::=
+  `if` expression block elsestatement |
+  `if` expression statement elsestatement
+*/
+
+static void ifstatement( hlState_t* s ){
+  hl_eabort(s);
+  expect(s, tk_if);
+  expression(s);
+  if( peek(s, tk_lbrc) ){
+    block(s);
+    elsestatement(s);
+  } else {
+    statement(s);
+  }
+}
+
+/*
+elsestatement ::=
+  `else` block |
+  `else` statement |
+  `else` ifstatement |
+  nil
+*/
+
+static void elsestatement( hlState_t* s ){
+  hl_eabort(s);
+  if( accept(s, tk_else) ){
+    if( peek(s, tk_lbrc) ){
+      block(s);
+    } else if( peek(s, tk_if) ){
+      ifstatement(s);
+    } else {
+      statement(s);
+    }
+  }
+}
+
+/* 
+whilestatement ::=
+  `while` expression block |
+  `while` expression statement
+*/
+
+static void whilestatement( hlState_t* s ){
+  hl_eabort(s);
+  expect(s, tk_while);
+  expression(s);
+  if( peek(s, tk_lbrc) ){
+    block(s);
+  } else {
+    statement(s);
+  }
+}
+
+/*
+forstatement ::=
+  `for` Name [ `,` Name ] `in` iterable block |         
+  `for` Name [ `,` Name ] `in` iterable statement 
+*/
+
+static void forstatement( hlState_t* s ){
+  hl_eabort(s);
+  expect(s, tk_for);
+  expect(s, tk_name);
+  if( accept(s, tk_com) ){
+    expect(s, tk_name);
+  }
+  expect(s, tk_in);
+  value(s);
+  if( peek(s, tk_lbrk) ){
+    block(s);
+  } else {
+    statement(s);
+  }
+}
+
+/*
+functionstatement ::=
+  `fn` Name namelist block | 
+  `fn` Name namelist `->` expression 
+*/
+
+static void functionstatement( hlState_t* s ){
+  hl_eabort(s);
+  expect(s, tk_fn);
+  expect(s, tk_name);
+  namelist(s);
+  if( accept(s, tk_arrow) ){
+    expression(s);
+  } else {
+    block(s);
+  }
+}
+
+/*
+functioncall ::=
+  Name valuesuffix                    *value must be a functioncall 
+  `(` expression `)` valuesuffix      *this too
+*/
+
+static void functioncall( hlState_t* s ){
+  hl_eabort(s);
+  if( accept(s, tk_lp) ){
+    expression(s);
+    expect(s, tk_rp);
+  } else {
+    expect(s, tk_name);
+  }
+  valuesuffix(s);
+}
+
+/*
+statement ::=
+  ifstatement |
+  whilestatement |
+  forstatement |
+  `return` expression |
+  `break` |
+  `let` Name [ assignment expression ] |
+  functionstatement |                         *sugar for assigning a lambda to a variable
+  Name valuesuffix  assignment expression | 
+  functioncall
+*/
+
+static void statement( hlState_t* s ){
+  hl_eabort(s);
+  if( peek(s, tk_if) ){
+    ifstatement(s);
+  } else if( peek(s, tk_while) ){
+    whilestatement(s);
+  } else if( peek(s, tk_for) ){
+    forstatement(s);
+  } else if( accept(s, tk_return) ){
+    expression(s);
+  } else if( peek(s, tk_break) ){
+    return;
+  } else if( accept(s, tk_let) ){
+    expect(s, tk_name);
+    if( assignment(s) ){
+      next(s);
+      expression(s);
+    }
+  } else if( accept(s, tk_fn) ){
+    functionstatement(s);
+  } else if( accept(s, tk_name) ){
+    valuesuffix(s);
+    if( assignment(s) ){
+      expression(s);
+    } else {
+      hl_error(s, "expected", "assignment");
+    }
+  } else {
+    functioncall(s);
+  }
+}
+
+/*                              
+statementlist ::=
+  statement statementlist | 
+  nil
+*/
+
+static void statementlist( hlState_t* s ){
+  hl_eabort(s);
+  if( accept(s, tk_eof) || accept(s, tk_rbrc) ){
+    return;
+  }
+  statement(s);
+  statementlist(s);
+}
+
+/*
+start ::=
+  statementlist
+*/
+
+void hl_pstart( hlState_t* s ){
+  hl_eabort(s);
+  next(s);
+  statementlist(s);
 }

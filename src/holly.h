@@ -133,6 +133,6 @@ struct _hlState_t {
 };
 
 /* temporary (eventually make static) */
-void hl_pnext( hlState_t* );
+void hl_pstart( hlState_t* );
 
 #endif
