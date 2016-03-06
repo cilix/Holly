@@ -16,20 +16,20 @@ let Person = fn name, age ->
 
 let bob = Person('bob')
 
-bob.speak(bob)
+bob.speak(bob, 25)
 
 let add = fn x, y -> x + y
 
-let a = add(2)
+let a = add(2, 4)
 
-hl_pname s, v {
+fn hl_pname s, v {
   let i = 0
   let b = nil
   while 
     hl_isalpha(v[i]) or 
     hl_isdigit(v[i]) or
     v[i] == '_' {
-    i += 1
+    i += 1 
   }
   if i > 20
     return ""

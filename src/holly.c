@@ -298,10 +298,16 @@ static void next( hlState_t* s ){
   int i, x;
   unsigned char* p = s->prog;
   hl_eabort(s);
+
   /* possibly free previous token data here 
      probably not, so we can pass the data to the vm */
-  printf("token: %s\n", hlTkns[s->ctok.type]);
-  s->ctok.type = tk_eof;
+  if( s->ctok.type == tk_name ){
+    printf("token: <name> :%s\n", s->ctok.data.data);
+  } else {
+    printf("token: %s\n", hlTkns[s->ctok.type]);
+  }
+  s->ctok.ltype = s->ctok.type;
+
   while( hl_isspace(p[s->ptr]) ) s->ptr++; 
   /* comments 
      inline comments start with -- 
@@ -404,7 +410,7 @@ static void next( hlState_t* s ){
           r += dec;
         }
         s->ctok.data.number = r;
-        s->ptr += i + 1;
+        s->ptr += i;
         s->ctok.type = tk_number; 
         return;
       }
@@ -435,6 +441,7 @@ static int expect( hlState_t* s, token t ){
     return 1;
   }
   hl_error(s, "unexpected token", hlTkns[s->ctok.type]);
+  fprintf(stderr, "expected %s\n", hlTkns[t]);
   return 0;
 }
 
@@ -839,7 +846,7 @@ static void statement( hlState_t* s ){
       next(s);
       expression(s);
     }
-  } else if( accept(s, tk_fn) ){
+  } else if( peek(s, tk_fn) ){
     functionstatement(s);
   } else if( peek(s, tk_name) ){
     value(s);
@@ -863,7 +870,7 @@ statementlist ::=
 static void statementlist( hlState_t* s ){
 statement_list:
   hl_eabort(s);
-  if( accept(s, tk_eof) || accept(s, tk_rbrc) ){
+  if( accept(s, tk_eof) || peek(s, tk_rbrc)){
     return;
   }
   statement(s);
