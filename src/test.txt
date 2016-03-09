@@ -14,7 +14,7 @@ let Person = fn name, age ->
     speak: fn self -> 
       print('hello, my name is ' + self.name) }
 
-let bob = Person('bob')
+let bob = Person('b\x6fb') -- string with hex literal in it 0x6f is 111 or 'o'
 
 bob.speak(bob, 25)
 
@@ -22,7 +22,7 @@ let add = fn x, y -> x + y
 
 let a = add(2, 4)
 
-fn hl_pname s, v {
+fn hl_pname s: Number, v {
   let i = 0
   let b = nil
   while 
@@ -32,7 +32,7 @@ fn hl_pname s, v {
     i += 1 
   }
   if i > 20
-    return ""
+    return returnVal
   return slice(v)
 }
 

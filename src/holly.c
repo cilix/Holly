@@ -188,30 +188,32 @@ void hl_hdel( hlHashTable_t* h, unsigned char* k, int l ){
  */
 
 typedef enum {
-  tk_str,   tk_num,    tk_object, tk_array,   tk_bool,   tk_oeq,
-  tk_meq,   tk_peq,    tk_teq,    tk_xeq,     tk_deq,    tk_modeq,
-  tk_rseq,  tk_lseq,   tk_aeq,    tk_leq,     tk_geq,    tk_land,
-  tk_lor,   tk_ls,     tk_rs,     tk_esc,     tk_lbrc,   tk_rbrc,
-  tk_lbrk,  tk_rbrk,   tk_col,    tk_lp,      tk_rp,     tk_sem,
-  tk_com,   tk_dcol,   tk_spr,    tk_per,     tk_arrow,  tk_not,
-  tk_lnot,  tk_ast,    tk_bor,    tk_sub,     tk_add,    tk_xor,
-  tk_div,   tk_mod,    tk_gt,     tk_lt,      tk_band,   tk_iseq,
-  tk_eq,    tk_let,    tk_if,     tk_else,    tk_return, tk_while,
-  tk_fn,    tk_true,   tk_false,  tk_nil,     tk_for,    tk_in,
-  tk_break, tk_string, tk_number, tk_boolean, tk_name,   tk_eof
+  tk_oeq,    tk_meq,    tk_peq,    tk_teq,     tk_xeq,    tk_deq,    
+  tk_modeq,  tk_rseq,   tk_lseq,   tk_aeq,     tk_leq,    tk_geq,        
+  tk_ls,     tk_rs,     tk_esc,    tk_lbrc,   
+  tk_rbrc,   tk_lbrk,   tk_rbrk,   tk_col,     tk_lp,     tk_rp,     
+  tk_sem,    tk_com,    tk_dcol,   tk_spr,     tk_per,    tk_arrow,  
+  tk_not,    tk_lnot,   tk_ast,    tk_bor,     tk_sub,    tk_add,    
+  tk_xor,    tk_div,    tk_mod,    tk_gt,      tk_lt,     tk_band,   
+  tk_iseq,   tk_eq,     tk_let,    tk_if,      tk_else,   tk_return, 
+  tk_while,  tk_fn,     tk_true,   tk_false,   tk_nil,    tk_for,    
+  tk_in,     tk_break,  tk_land,   tk_lor,     tk_str,    tk_num,     
+  tk_object, tk_array,  tk_bool,   tk_string,  tk_number, tk_boolean,
+  tk_name,   tk_eof
 } token;
 
-static const int hlTkCnt = 60;
+static const int tkSymCnt = 42;
+static const int tkCnt = 61;
 
 static const char* hlTkns[] = {
-  "String", "Number", "Object", "Array", "Boolean",
-  "|=", "-=", "+=", "*=", "^=", "/=", "%=", ">>=", 
-  "<<=", "&=", "<=", ">=", "and", "or", "<<", ">>",
+  "|=", "-=", "+=", "*=", "^=", "/=", "%=", ">>=",
+  "<<=", "&=", "<=", ">=", "<<", ">>",
   "\\", "{", "}", "[", "]", ":", "(", ")", ";", ",",
-  "::", "..", ".", "->", "!", "~", "*", "|", "-", 
-  "+", "^", "/", "%", ">", "<", "&", "==", "=", "let", 
-  "if", "else", "return", "while", "fn", "true", 
-  "false", "nil", "for", "in", "break",
+  "::", "..", ".", "->", "!", "~", "*", "|", "-",
+  "+", "^", "/", "%", ">", "<", "&", "==", "=", "let",
+  "if", "else", "return", "while", "fn", "true",
+  "false", "nil", "for", "in", "break", "and", "or",
+  "String", "Number", "Object", "Array", "Boolean",
   "<string>", "<number>", "<boolean>", "<name>", "<eof>"
 };
 
@@ -243,8 +245,7 @@ static unsigned char pEsc( unsigned char* p, int* i ){
       unsigned char r = *(p + 2);
       hl_hextod(l);
       hl_hextod(r);
-      c = l << 4;
-      c = c | r;
+      c = (l << 4) | r;
       (*i) += 2; 
     } break;
     default: c = 0; break;
@@ -302,7 +303,9 @@ static void next( hlState_t* s ){
   /* possibly free previous token data here 
      probably not, so we can pass the data to the vm */
   if( s->ctok.type == tk_name ){
-    printf("token: <name> :%s\n", s->ctok.data.data);
+    printf("token: <name> : %s\n", s->ctok.data.data);
+  } else if( s->ctok.type == tk_string ){
+    printf("token: <string> \"%s\"\n", s->ctok.data.data);
   } else {
     printf("token: %s\n", hlTkns[s->ctok.type]);
   }
@@ -330,19 +333,11 @@ static void next( hlState_t* s ){
     s->ctok.type = tk_eof;
     return;
   }
-  /* XXX : rewrite this part completely 
-     check for symbols and reserved words individually */
-  for( i = 0; i < hlTkCnt; i++ ){
+  /* check for symbols */
+  for( i = 0; i < tkSymCnt; i++ ){
     int l = strlen(hlTkns[i]);
-    /* make sure the string comparison doesn't go off 
-       the end of the buffer */
     if( hl_ismatch(p + x, hlTkns[i], l) ){
-      if( i == tk_true || i == tk_false ){
-        s->ctok.type = tk_boolean; 
-        s->ctok.data.number = (i == tk_true); 
-      } else {
-        s->ctok.type = i;
-      }
+      s->ctok.type = i;
       s->ptr += l;
       return;
     }
@@ -376,17 +371,32 @@ static void next( hlState_t* s ){
     default: {
       if( hl_isalpha(p[x]) ){
         unsigned char* str;
-        int l = 0;
+        unsigned l = 0, i;
         s->ctok.type = tk_name; /* name tok */
         str = pName(s, p + x);
-        if( str ){
-          /* check for reserved words here */
-          l = strlen((const char *)str);
-          s->ctok.data.data = str;
-          s->ptr += l;
-          s->ctok.l = l;
+        if( !str ){
+          /* some error happened */
+          return;
         }
-        return;
+        l = strlen((const char *)str);
+        /* check for reserved words */
+        for( i = tkSymCnt; i < tkCnt; i++ ){
+          if( l != strlen(hlTkns[i]) )
+            continue;
+          if( !hl_ismatch(str, hlTkns[i], l) )
+            continue;
+          if( i == tk_true || i == tk_false ){
+            s->ctok.type = tk_boolean; 
+            s->ctok.data.number = (i == tk_true); 
+          } else {
+            s->ctok.type = i;
+          }
+          s->ptr += l;
+          return;
+        }
+        s->ctok.data.data = str;
+        s->ptr += l;
+        s->ctok.l = l;
       } else if( hl_isdigit(p[x]) ){
         int i = 0, df = 0, dc = 0;
         unsigned char c;
@@ -412,9 +422,8 @@ static void next( hlState_t* s ){
         s->ctok.data.number = r;
         s->ptr += i;
         s->ctok.type = tk_number; 
-        return;
       }
-    } break;
+    } return;
   }
   s->error = 1;
   fprintf(stderr, "unexpected %c\n", p[x]);
@@ -440,8 +449,8 @@ static int expect( hlState_t* s, token t ){
     next(s);
     return 1;
   }
-  hl_error(s, "unexpected token", hlTkns[s->ctok.type]);
-  fprintf(stderr, "expected %s\n", hlTkns[t]);
+  fprintf(stderr, "expected %s near %s\n", hlTkns[t], hlTkns[s->ctok.type]);
+  s->error = 1;
   return 0;
 }
 
