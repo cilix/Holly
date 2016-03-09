@@ -312,21 +312,18 @@ static void next( hlState_t* s ){
   s->ctok.ltype = s->ctok.type;
 
   while( hl_isspace(p[s->ptr]) ) s->ptr++; 
-  /* comments 
-     inline comments start with -- 
-     block comments start with --- and end with -- */
+  /* inline comments start with -- */
   if( hl_ismatch(p + s->ptr, "--", 2) ){
     s->ptr += 2;
-    if( p[s->ptr] == '-' ){
-      while( 
-        !hl_ismatch(p + s->ptr, "--", 2) && 
-        p[s->ptr] != 0
-      ) s->ptr++;
-      if( p[s->ptr] != 0 ) s->ptr += 2;
-    } else {
-      while( p[s->ptr] != '\n' && p[s->ptr] != 0 ) s->ptr++; 
-    }
+    while( p[s->ptr] != '\n' && p[s->ptr] != 0 ) s->ptr++; 
     while( hl_isspace(p[s->ptr]) ) s->ptr++; 
+  }
+   /* block comments start with /- and end with -/ */
+  if( hl_ismatch(p + s->ptr, "/-", 2) ){
+    s->ptr += 2;
+    while( !hl_ismatch(p + s->ptr, "-/", 2) && p[s->ptr] != 0 ) s->ptr++; 
+    s->ptr += 2;
+    while( hl_isspace(p[s->ptr]) ) s->ptr++;
   }
   x = s->ptr;
   if( !p[x] ){

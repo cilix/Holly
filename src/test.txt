@@ -3,7 +3,7 @@ let Person = fn name, age {
     name: name,
     age: age,
     speak: fn self {
-      print('Hello, my name is ' + self.name)
+      print(/-'Hello, my name is ' + self.name-/)
     }
   }
 }
