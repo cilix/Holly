@@ -495,6 +495,7 @@ static int binop( hlState_t* s ){
     tok == tk_gt        ||
     tok == tk_lt        ||
     tok == tk_band      ||
+    tok == tk_ast       ||
     tok == tk_iseq;
 }
 
@@ -713,8 +714,10 @@ value_suffix:
     expect(s, tk_rbrk);
     goto value_suffix;
   } else if( accept(s, tk_lp) ){
-    expressionlist(s);
-    expect(s, tk_rp);
+    if( !accept(s, tk_rp) ){
+      expressionlist(s);
+      expect(s, tk_rp);
+    }
     goto value_suffix;
   }
 }

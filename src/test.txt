@@ -35,3 +35,19 @@ fn hl_pname s, v {
     return ""
   return slice(v)
 }
+
+-- demonstrating how insignificant whitespace is
+
+fish.sticks[(((('are')))) * (((5+ 4 +
+
+    (((2)))  )))].great(to, 
+
+
+
+  Eat)()()(               )()   
+
+
+
+  .         noway[
+                                yes] 
+                                = 4
