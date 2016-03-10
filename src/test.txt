@@ -3,7 +3,7 @@ let Person = fn name, age {
     name: name,
     age: age,
     speak: fn self {
-      print(/-'Hello, my name is ' + self.name-/)
+      print(/-'Hello, my name is ' + self.name-/) 
     }
   }
 }
@@ -25,26 +25,26 @@ let a = add(2, 4)
 fn hl_pname s: Number, v {
   let i = 0
   let b = nil
-  while 
-    hl_isalpha(v[i]) or 
-    hl_isdigit(v[i]) or
-    v[i] == '_' {
-    i += 1 
-  }
+
+  while hl_isalpha(v[i]) 
+     or hl_isdigit(v[i]) 
+     or v[i] == '_' { i += 1 }
+
   if i > 20
     return returnVal
+
   return slice(v)
 }
 
 -- demonstrating how insignificant whitespace is
 
-fish.sticks[(((('are')))) * (((5+ 4 +
+fish.sticks[(((('are')))) * (((5+ 4.123424852 +
 
     (((2)))  )))].great(to, 
 
 
 
-  Eat)()()(               )()   
+  Eat)()(  )(               )()   
 
 
 

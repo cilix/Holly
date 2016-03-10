@@ -295,6 +295,33 @@ static int pow( int b, int e ){
   return r;
 }
 
+static void pNumber( hlState_t* s, unsigned char* p, int x ){
+  int i = 0, df = 0, dc = 0;
+  unsigned char c;
+  hlNum_t r = 0.0f, dec = 0.0f;
+  while( 
+    (c = p[x + i]) &&
+    (hl_isdigit(c) || (c == '.' && !df))
+  ){
+    if( c == '.' ) df = 1;
+    else {
+      if( !df ) r = r * 10 + (c - '0');
+      else {
+        dc++;
+        dec = dec * 10 + (c - '0');
+      }
+    }
+    i++;  
+  }
+  if( dec ){
+    dec /= pow(10, dc);
+    r += dec;
+  }
+  s->ctok.data.number = r;
+  s->ptr += i;
+  s->ctok.type = tk_number;
+}
+
 static void next( hlState_t* s ){
   int i, x;
   unsigned char* p = s->prog;
@@ -306,6 +333,8 @@ static void next( hlState_t* s ){
     printf("token: <name> : %s\n", s->ctok.data.data);
   } else if( s->ctok.type == tk_string ){
     printf("token: <string> \"%s\"\n", s->ctok.data.data);
+  } else if( s->ctok.type == tk_number ){
+    printf("token: <number> %f\n", s->ctok.data.number);
   } else {
     printf("token: %s\n", hlTkns[s->ctok.type]);
   }
@@ -395,30 +424,7 @@ static void next( hlState_t* s ){
         s->ptr += l;
         s->ctok.l = l;
       } else if( hl_isdigit(p[x]) ){
-        int i = 0, df = 0, dc = 0;
-        unsigned char c;
-        hlNum_t r = 0.0f, dec = 0.0f;
-        while( 
-          (c = p[x + i]) &&
-          (hl_isdigit(c) || (c == '.' && !df))
-        ){
-          if( c == '.' ) df = 1;
-          else {
-            if( !df ) r = r * 10 + (c - '0');
-            else {
-              dc++;
-              dec = dec * 10 + (c - '0');
-            }
-          }
-          i++;  
-        }
-        if( dec ){
-          dec /= pow(10, dc);
-          r += dec;
-        }
-        s->ctok.data.number = r;
-        s->ptr += i;
-        s->ctok.type = tk_number; 
+        pNumber(s, p, x);
       }
     } return;
   }
