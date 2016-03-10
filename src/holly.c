@@ -37,7 +37,7 @@ static void hl_error( hlState_t* s, const char* e, const char* a ){
 void* hl_malloc(hlState_t* h, int s ){
   void* buf;
   if( !(buf = malloc(s)) ){
-    hl_error(h, "malloc failuer\n", NULL);
+    hl_error(h, "malloc failure\n", NULL);
   } else {
     memset(buf, 0, s);
   }
@@ -198,12 +198,13 @@ typedef enum {
   tk_iseq,   tk_eq,     tk_let,    tk_if,      tk_else,   tk_return, 
   tk_while,  tk_fn,     tk_true,   tk_false,   tk_nil,    tk_for,    
   tk_in,     tk_break,  tk_land,   tk_lor,     tk_str,    tk_num,     
-  tk_object, tk_array,  tk_bool,   tk_string,  tk_number, tk_boolean,
+  tk_object, tk_array,  tk_bool,   tk_function, tk_Nil,
+  tk_string,  tk_number, tk_boolean,
   tk_name,   tk_eof
 } token;
 
 static const int tkSymCnt = 42;
-static const int tkCnt = 61;
+static const int tkCnt = 63;
 
 static const char* hlTkns[] = {
   "|=", "-=", "+=", "*=", "^=", "/=", "%=", ">>=",
@@ -213,7 +214,8 @@ static const char* hlTkns[] = {
   "+", "^", "/", "%", ">", "<", "&", "==", "=", "let",
   "if", "else", "return", "while", "fn", "true",
   "false", "nil", "for", "in", "break", "and", "or",
-  "String", "Number", "Object", "Array", "Boolean",
+  "String", "Number", "Object", "Array", 
+  "Boolean", "Function", "Nil",
   "<string>", "<number>", "<boolean>", "<name>", "<eof>"
 };
 
@@ -606,11 +608,17 @@ static void name( hlState_t* s ){
   hl_eabort(s);
   expect(s, tk_name);
   if( accept(s, tk_col) ){
-    accept(s, tk_str)    ||   
-    accept(s, tk_num)    ||
-    accept(s, tk_object) ||
-    accept(s, tk_array)  ||
-    expect(s, tk_bool);
+    if( accept(s, tk_str)      ||   
+        accept(s, tk_num)      ||
+        accept(s, tk_object)   ||
+        accept(s, tk_array)    ||
+        accept(s, tk_function) ||
+        accept(s, tk_Nil)      ||
+        accept(s, tk_bool) ){
+      return;
+    } else {
+      hl_error(s, "expected", "type declaration");
+    }
   };
 }
 

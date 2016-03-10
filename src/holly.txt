@@ -1,6 +1,6 @@
 The Holly Programming Language
 
-types: String, Number, Object, Array, Boolean
+types: String, Number, Object, Array, Boolean, Function, Nil
 binary operators: | - + * ^ / % >> << & 
 assignment: |= -= += *= ^= /= %= >>= <<= &= =
 unary operator: ! ~ * -

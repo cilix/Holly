@@ -22,7 +22,7 @@ let add = fn x, y -> x + y
 
 let a = add(2, 4)
 
-fn hl_pname s: Number, v {
+fn hl_pname s: fish, v {
   let i = 0
   let b = nil
 
