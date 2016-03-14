@@ -22,7 +22,7 @@ let add = fn x, y -> x + y
 
 let a = add(2, 4)
 
-fn hl_pname s: fish, v {
+fn hl_pname s: Number, v {
   let i = 0
   let b = nil
 
@@ -30,8 +30,7 @@ fn hl_pname s: fish, v {
      or hl_isdigit(v[i]) 
      or v[i] == '_' { i += 1 }
 
-  if i > 20
-    return returnVal
+  if i > 20 return returnVal
 
   return slice(v)
 }

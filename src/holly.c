@@ -340,7 +340,6 @@ static void next( hlState_t* s ){
   } else {
     printf("token: %s\n", hlTkns[s->ctok.type]);
   }
-  s->ctok.ltype = s->ctok.type;
 
   while( hl_isspace(p[s->ptr]) ) s->ptr++; 
   /* inline comments start with -- */
@@ -374,7 +373,6 @@ static void next( hlState_t* s ){
     case 0:
       s->ctok.type = 0;
       return;
-    /* check for symbols here */
     case '\'':
     case '"': {
       int i = 1;

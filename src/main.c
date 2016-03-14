@@ -130,7 +130,6 @@ int main( int argc, char** argv ) {
     s.error = 0;
     s.prog = p;
     s.ctok.type = -1;
-    s.ctok.ltype = -1;
     hl_pstart(&s);
   }
   return 0;

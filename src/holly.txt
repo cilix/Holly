@@ -201,5 +201,3 @@ let name = fn v {
   if i == 0 return ""
   return slice(v, i)
 }
-
-

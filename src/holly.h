@@ -114,7 +114,6 @@ other reserved words: let if else return while fn true false nil for in break
 
 typedef struct {
   int type;
-  int ltype; /* last parsed token */
   int  l;
   union {
     hlNum_t number;
