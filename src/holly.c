@@ -994,6 +994,9 @@ void hl_pstart( hlState_t* s ){
   statementlist(s);
 }
 
+#define pop(x) x->estack[--(x->ep)]
+#define top(x) x->estack[(x->ep)++]
+
 void hl_vrun( hlState_t* s ){
   int p = 0, m = s->ip;
   for( ; p < m; p++ ){
@@ -1001,31 +1004,27 @@ void hl_vrun( hlState_t* s ){
     int arg = s->ins[p] & 0xffff;
     switch( op ){
       case OP_PUSHNUM: {
-        s->estack[s->ep++] = s->vstack[arg];
+        top(s) = s->vstack[arg];
       } break;
       case OP_ADD: {
-        hlNum_t l = s->estack[s->ep - 2].v.n;
-        hlNum_t r = s->estack[s->ep - 1].v.n;
-        s->estack[s->ep - 2].v.n = l + r;
-        s->ep -= 1;
+        hlNum_t r = pop(s).v.n;
+        hlNum_t l = pop(s).v.n;
+        top(s).v.n = l + r;
       } break;
       case OP_DIV: {
-        hlNum_t l = s->estack[s->ep - 2].v.n;
-        hlNum_t r = s->estack[s->ep - 1].v.n;
-        s->estack[s->ep - 2].v.n = l / r;
-        s->ep -= 1;
+        hlNum_t r = pop(s).v.n;
+        hlNum_t l = pop(s).v.n;
+        top(s).v.n = l / r;
       } break;
       case OP_SUB: {
-        hlNum_t l = s->estack[s->ep - 2].v.n;
-        hlNum_t r = s->estack[s->ep - 1].v.n;
-        s->estack[s->ep - 2].v.n = l - r;
-        s->ep -= 1;
+        hlNum_t r = pop(s).v.n;
+        hlNum_t l = pop(s).v.n;
+        top(s).v.n = l - r;
       } break;
       case OP_MULT: {
-        hlNum_t l = s->estack[s->ep - 2].v.n;
-        hlNum_t r = s->estack[s->ep - 1].v.n;
-        s->estack[s->ep - 2].v.n = l * r;
-        s->ep -= 1;
+        hlNum_t r = pop(s).v.n;
+        hlNum_t l = pop(s).v.n;
+        top(s).v.n = l * r;
       } break;
       default: break;
     }
