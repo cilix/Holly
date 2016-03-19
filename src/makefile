@@ -1,5 +1,5 @@
 CC = clang
-WARNS = -W -Wall -pedantic -Wno-comment -Wno-variadic-macros -Wno-unused-function
+WARNS = -Wall -ansi -pedantic
 
 all:
 	$(CC) main.c holly.c $(WARNS) -O3 -o holly -std=c89

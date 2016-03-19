@@ -616,14 +616,14 @@ expression_list:
 spread ::=
   Number `..` Number  
 */
-
+/*
 static void spread( hlState_t* s ){
   hl_eabort(s);
   expect(s, tk_number);
   expect(s, tk_spr);
   expect(s, tk_number);
 }
-
+*/
 /*
 object ::=
   `{` pairlist `}`
