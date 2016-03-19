@@ -34,7 +34,7 @@ static void hl_error( hlState_t* s, const char* e, const char* a ){
   s->error = 1;
 }
 
-void* hl_malloc(hlState_t* h, int s ){
+void* hl_malloc( hlState_t* h, int s ){
   void* buf;
   if( !(buf = malloc(s)) ){
     hl_error(h, "malloc failure\n", NULL);
@@ -42,6 +42,74 @@ void* hl_malloc(hlState_t* h, int s ){
     memset(buf, 0, s);
   }
   return buf;
+}
+
+enum {
+  OP_PUSHNUM,
+  OP_ADD,
+  OP_SUB,
+  OP_MULT,
+  OP_DIV
+};
+
+enum {
+  numtype,
+  strtype,
+  booltype,
+  objtype,
+  arraytype
+};
+
+static void ipush( hlState_t* h, int op, int arg ){
+  h->ins[h->ip++] = (op << 16) | arg;
+}
+
+/* value stack */
+static int vpushbool( hlState_t* h, hlBool_t b ){
+  int i = h->vp++;
+  hlValue_t v;
+  v.v.b = b;
+  v.t = booltype;
+  h->vstack[i] = v;
+  return i;
+}
+
+static int vpushstr( hlState_t* h, unsigned char* s, int l ){
+  int i = h->vp++;
+  hlValue_t v;
+  hlString_t* c = hl_malloc(h, sizeof(hlString_t*));
+  if( l <= HL_PTR_SIZE ){
+    memcpy(c->str.s, s, l);
+    free(s);
+  } else {
+    c->str.l = s;
+  }
+  c->l = l;
+  v.v.s = c;
+  v.t = strtype;
+  h->vstack[i] = v;
+  return i;
+}
+
+static int vpushnum( hlState_t* h, hlNum_t n ){
+  int i = h->vp++;
+  hlValue_t v;
+  v.v.n = n;
+  v.t = numtype;
+  h->vstack[i] = v;
+  return i;
+}
+
+void hl_init( hlState_t* h ){
+  h->error = 0;
+  h->ins = hl_malloc(h, 100 * sizeof(unsigned));
+  h->estack = hl_malloc(h, 100 * sizeof(hlValue_t));
+  h->vstack = hl_malloc(h, 100 * sizeof(hlValue_t));
+  h->ctok.type = -1;
+  h->ptr = 0;
+  h->ip = 0;
+  h->ep = 0;
+  h->vp = 0;
 }
 
 /* the maximum index in the primes array
@@ -256,7 +324,7 @@ static unsigned char pEsc( unsigned char* p, int* i ){
   return c;
 }
 
-static unsigned char* pString( hlState_t* s, unsigned char* v, int l ){
+static unsigned char* pstring( hlState_t* s, unsigned char* v, int l ){
   int i = 0, j = 0;
   unsigned char c, e;
   unsigned char* b = hl_malloc(s, l + 1);
@@ -273,7 +341,7 @@ static unsigned char* pString( hlState_t* s, unsigned char* v, int l ){
   return b;
 }
 
-static unsigned char* pName( hlState_t* s, unsigned char* v ){
+static unsigned char* pname( hlState_t* s, unsigned char* v ){
   int i = 0;
   unsigned char* b;
   while(
@@ -297,7 +365,7 @@ static int pow( int b, int e ){
   return r;
 }
 
-static void pNumber( hlState_t* s, unsigned char* p, int x ){
+static void pnumber( hlState_t* s, unsigned char* p, int x ){
   int i = 0, df = 0, dc = 0;
   unsigned char c;
   hlNum_t r = 0.0f, dec = 0.0f;
@@ -322,6 +390,25 @@ static void pNumber( hlState_t* s, unsigned char* p, int x ){
   s->ctok.data.number = r;
   s->ptr += i;
   s->ctok.type = tk_number;
+}
+
+static int isreserved( hlState_t* s, unsigned char* str, unsigned l ){
+  int i;
+  for( i = tkSymCnt; i < tkCnt; i++ ){
+    if( 
+      l != strlen(hlTkns[i]) || 
+      !hl_ismatch(str, hlTkns[i], l) 
+    ) continue;
+    if( i == tk_true || i == tk_false ){
+      s->ctok.type = tk_boolean; 
+      s->ctok.data.number = (i == tk_true); 
+    } else {
+      s->ctok.type = i;
+    }
+    s->ptr += l;
+    return 1;
+  }
+  return 0;
 }
 
 static void next( hlState_t* s ){
@@ -386,7 +473,7 @@ static void next( hlState_t* s ){
         s->error = 1;
         return;
       }
-      str = pString(s, p + x + 1, i - 1);
+      str = pstring(s, p + x + 1, i - 1);
       if( str ){
         s->ctok.type = tk_string; 
         s->ctok.data.data = str;
@@ -397,34 +484,21 @@ static void next( hlState_t* s ){
     default: {
       if( hl_isalpha(p[x]) ){
         unsigned char* str;
-        unsigned l = 0, i;
+        unsigned l = 0;
         s->ctok.type = tk_name; /* name tok */
-        str = pName(s, p + x);
+        str = pname(s, p + x);
         if( !str ){
           /* some error happened */
           return;
         }
         l = strlen((const char *)str);
-        /* check for reserved words */
-        for( i = tkSymCnt; i < tkCnt; i++ ){
-          if( l != strlen(hlTkns[i]) )
-            continue;
-          if( !hl_ismatch(str, hlTkns[i], l) )
-            continue;
-          if( i == tk_true || i == tk_false ){
-            s->ctok.type = tk_boolean; 
-            s->ctok.data.number = (i == tk_true); 
-          } else {
-            s->ctok.type = i;
-          }
+        if( !isreserved(s, str, l) ){
+          s->ctok.data.data = str;
           s->ptr += l;
-          return;
+          s->ctok.l = l;
         }
-        s->ctok.data.data = str;
-        s->ptr += l;
-        s->ctok.l = l;
       } else if( hl_isdigit(p[x]) ){
-        pNumber(s, p, x);
+        pnumber(s, p, x);
       }
     } return;
   }
@@ -693,6 +767,8 @@ static void expression( hlState_t* s ){
   if( accept(s, tk_string) ){
     /* emit */
   } else if( accept(s, tk_number) ){
+    int i = vpushnum(s, s->ctok.data.number);
+    ipush(s, OP_PUSHNUM, i);
     /* emit */
   } else if( accept(s, tk_boolean) ){
     /* emit */
@@ -708,8 +784,17 @@ static void expression( hlState_t* s ){
     value(s);
   }
   if( binop(s) ){
+    int op = 0;
+    switch( s->ctok.type ){
+      case tk_sub: op = OP_SUB; break;
+      case tk_add: op = OP_ADD; break;
+      case tk_div: op = OP_DIV; break;
+      case tk_ast: op = OP_MULT; break;
+      default: break;
+    }
     next(s);
     expression(s);
+    ipush(s, op, 0);
   }
 }
 
@@ -907,4 +992,43 @@ void hl_pstart( hlState_t* s ){
   hl_eabort(s);
   next(s);
   statementlist(s);
+}
+
+void hl_vrun( hlState_t* s ){
+  int p = 0, m = s->ip;
+  for( ; p < m; p++ ){
+    int op = s->ins[p] >> 16;
+    int arg = s->ins[p] & 0xffff;
+    switch( op ){
+      case OP_PUSHNUM: {
+        s->estack[s->ep++] = s->vstack[arg];
+      } break;
+      case OP_ADD: {
+        hlNum_t l = s->estack[s->ep - 2].v.n;
+        hlNum_t r = s->estack[s->ep - 1].v.n;
+        s->estack[s->ep - 2].v.n = l + r;
+        s->ep -= 1;
+      } break;
+      case OP_DIV: {
+        hlNum_t l = s->estack[s->ep - 2].v.n;
+        hlNum_t r = s->estack[s->ep - 1].v.n;
+        s->estack[s->ep - 2].v.n = l / r;
+        s->ep -= 1;
+      } break;
+      case OP_SUB: {
+        hlNum_t l = s->estack[s->ep - 2].v.n;
+        hlNum_t r = s->estack[s->ep - 1].v.n;
+        s->estack[s->ep - 2].v.n = l - r;
+        s->ep -= 1;
+      } break;
+      case OP_MULT: {
+        hlNum_t l = s->estack[s->ep - 2].v.n;
+        hlNum_t r = s->estack[s->ep - 1].v.n;
+        s->estack[s->ep - 2].v.n = l * r;
+        s->ep -= 1;
+      } break;
+      default: break;
+    }
+  }
+  printf("Result: %f\n", s->estack[s->ep - 1].v.n);
 }

@@ -127,10 +127,10 @@ int main( int argc, char** argv ) {
   if( argc > 1 ){
     unsigned char* p = readfile(argv[1]);
     hlState_t s;
-    s.error = 0;
+    hl_init(&s);
     s.prog = p;
-    s.ctok.type = -1;
     hl_pstart(&s);
+    hl_vrun(&s);
   }
   return 0;
 }

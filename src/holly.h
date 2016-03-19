@@ -130,9 +130,18 @@ struct _hlState_t {
   int            ptr;
   hlToken_t      ctok;
   unsigned char* prog;
+  /* vm */
+  int            ip;
+  int            ep;
+  int            vp;
+  unsigned*      ins;
+  hlValue_t*     estack;
+  hlValue_t*     vstack;
 };
 
 /* temporary (eventually make static) */
 void hl_pstart( hlState_t* );
 
+void hl_init( hlState_t* );
+void hl_vrun( hlState_t* );
 #endif
