@@ -1,10 +1,11 @@
+CC = clang
 WARNS = -W -Wall -pedantic -Wno-comment -Wno-variadic-macros -Wno-unused-function
 
 all:
-	gcc main.c holly.c $(WARNS) -std=c89 -O3 -lm -o holly 
+	$(CC) main.c holly.c $(WARNS) -O3 -o holly -std=c89
 
 test:
 	./holly test.txt
 
 clean:
-	rm -rf holly
+	rm holly
