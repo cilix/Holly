@@ -45,7 +45,7 @@ void* hl_malloc( hlState_t* h, int s ){
 }
 
 enum {
-  OP_PUSHNUM,
+  OP_PUSHVAL,
   OP_ADD,
   OP_SUB,
   OP_MULT,
@@ -77,7 +77,7 @@ static int vpushbool( hlState_t* h, hlBool_t b ){
 static int vpushstr( hlState_t* h, unsigned char* s, int l ){
   int i = h->vp++;
   hlValue_t v;
-  hlString_t* c = hl_malloc(h, sizeof(hlString_t*));
+  hlString_t* c = hl_malloc(h, sizeof(hlString_t));
   if( l <= HL_PTR_SIZE ){
     memcpy(c->str.s, s, l);
     free(s);
@@ -765,13 +765,14 @@ static void expression( hlState_t* s ){
      and everything is right assosiative */
   hl_eabort(s);
   if( accept(s, tk_string) ){
-    /* emit */
+    int i = vpushstr(s, s->ctok.data.data, s->ctok.l);
+    ipush(s, OP_PUSHVAL, i);
   } else if( accept(s, tk_number) ){
     int i = vpushnum(s, s->ctok.data.number);
-    ipush(s, OP_PUSHNUM, i);
-    /* emit */
+    ipush(s, OP_PUSHVAL, i);
   } else if( accept(s, tk_boolean) ){
-    /* emit */
+    int i = vpushbool(s, s->ctok.data.number);
+    ipush(s, OP_PUSHVAL, i);
   } else if( accept(s, tk_nil) ){
     /* emit */
   } else if( unop(s) ){
@@ -997,33 +998,50 @@ void hl_pstart( hlState_t* s ){
 #define pop(x) x->estack[--(x->ep)]
 #define top(x) x->estack[(x->ep)++]
 
+static hlNum_t popn( hlState_t* s ){
+  hlValue_t* v = &(pop(s));
+  hlNum_t n = 0;
+  if( v->t != numtype ){
+    s->error = 1;
+    fprintf(stderr, "invalid operand\n");
+  } else {
+    n = v->v.n;
+  }
+  return n;
+}
+
 void hl_vrun( hlState_t* s ){
   int p = 0, m = s->ip;
+  hl_eabort(s);
   for( ; p < m; p++ ){
     int op = s->ins[p] >> 16;
     int arg = s->ins[p] & 0xffff;
     switch( op ){
-      case OP_PUSHNUM: {
+      case OP_PUSHVAL: {
         top(s) = s->vstack[arg];
       } break;
       case OP_ADD: {
-        hlNum_t r = pop(s).v.n;
-        hlNum_t l = pop(s).v.n;
+        hlNum_t r = popn(s);
+        hlNum_t l = popn(s);
+        hl_eabort(s);
         top(s).v.n = l + r;
       } break;
       case OP_DIV: {
-        hlNum_t r = pop(s).v.n;
-        hlNum_t l = pop(s).v.n;
+        hlNum_t r = popn(s);
+        hlNum_t l = popn(s);
+        hl_eabort(s);
         top(s).v.n = l / r;
       } break;
       case OP_SUB: {
-        hlNum_t r = pop(s).v.n;
-        hlNum_t l = pop(s).v.n;
+        hlNum_t r = popn(s);
+        hlNum_t l = popn(s);
+        hl_eabort(s);
         top(s).v.n = l - r;
       } break;
       case OP_MULT: {
-        hlNum_t r = pop(s).v.n;
-        hlNum_t l = pop(s).v.n;
+        hlNum_t r = popn(s);
+        hlNum_t l = popn(s);
+        hl_eabort(s);
         top(s).v.n = l * r;
       } break;
       default: break;
