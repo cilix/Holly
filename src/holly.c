@@ -801,7 +801,7 @@ static void expression( hlState_t* s ){
 
 /*
 valuesuffix ::=
-  `.` Name valuesuffix |
+  `:` Name valuesuffix |
   `[` expression `]` valuesuffix |  
   `(` expressionlist `)` valuesuffix |
   nil
@@ -810,7 +810,7 @@ valuesuffix ::=
 static void valuesuffix( hlState_t* s ){
 value_suffix:
   hl_eabort(s);
-  if( accept(s, tk_per) ){
+  if( accept(s, tk_col) ){
     expect(s, tk_name);
     goto value_suffix;
   } else if( accept(s, tk_lbrk) ){

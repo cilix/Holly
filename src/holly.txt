@@ -75,7 +75,7 @@ value ::=
   Name valuesuffix 
   
 valuesuffix ::=
-  `.` Name valuesuffix |
+  `:` Name valuesuffix |
   `[` expression `]` valuesuffix |  
   `(` expressionlist `)` valuesuffix |
   nil
@@ -185,7 +185,7 @@ let Person = fn name, age ->
 
 let bob = Person('bob', 25)
 
-bob.speak(bob)
+bob:speak(bob)
 
 let add = fn x, y -> x + y
 
