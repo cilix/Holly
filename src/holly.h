@@ -59,14 +59,12 @@ void          hl_hdel( hlHashTable_t*, unsigned char*, int );
 
 /*
  * Values and Types
- * Arithmetic functions are declared here as well as some primitive functions
- *   like array, string and object access and manipulation
- * Other functions belong in the stdlib via the embedding api
  */
 
 typedef double            hlNum_t;
 typedef unsigned char     hlBool_t;
 typedef struct _hlValue_t hlValue_t;
+typedef struct _hlFunc_t  hlFunc_t;
 
 typedef struct {
   int l;
@@ -90,12 +88,27 @@ typedef struct {
 struct _hlValue_t {
   int t;
   union {
+    hlFunc_t*   f;
     hlString_t* s; /* objects larger than 8 bytes are references */
     hlNum_t     n;
     hlBool_t    b;
     hlObject_t* o; 
     hlArray_t   a;
   } v;
+};
+
+/*
+ * Function 
+ */
+
+struct _hlFunc_t {
+  hlFunc_t*      env;
+  hlState_t*     state;
+  hlHashTable_t* locals;
+  hlValue_t*     estack;
+  unsigned*      ins;
+  int            ip;
+  int            ep;
 };
 
 /*
@@ -131,11 +144,9 @@ struct _hlState_t {
   hlToken_t      ctok;
   unsigned char* prog;
   /* vm */
-  int            ip;
-  int            ep;
+  hlFunc_t*      fs; /* current function state */
+  hlFunc_t*      global; /* global state */
   int            vp;
-  unsigned*      ins;
-  hlValue_t*     estack;
   hlValue_t*     vstack;
 };
 

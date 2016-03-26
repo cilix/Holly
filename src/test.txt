@@ -1,5 +1,5 @@
 h = 5 + (2 / 3) + 6 * 9
-/-
+
 let Person = fn name, age {
   return { 
     name: name,
@@ -34,4 +34,5 @@ let name = fn v {
   if i == 0 return ""
   return slice(v, i)
 }
--/
+
+value.hello().world().function().composition()

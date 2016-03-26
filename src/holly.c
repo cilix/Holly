@@ -36,6 +36,7 @@ static void hl_error( hlState_t* s, const char* e, const char* a ){
 
 void* hl_malloc( hlState_t* h, int s ){
   void* buf;
+  hl_eabortr(h, NULL);
   if( !(buf = malloc(s)) ){
     hl_error(h, "malloc failure\n", NULL);
   } else {
@@ -61,7 +62,8 @@ enum {
 };
 
 static void ipush( hlState_t* h, int op, int arg ){
-  h->ins[h->ip++] = (op << 16) | arg;
+  h->fs->ins[h->fs->ip++] = (op << 16) | arg;
+  /* realloc here */
 }
 
 /* value stack */
@@ -100,15 +102,24 @@ static int vpushnum( hlState_t* h, hlNum_t n ){
   return i;
 }
 
+static hlFunc_t* funcstate( hlState_t* h ){
+  hlFunc_t* f = hl_malloc(h, sizeof(hlFunc_t));
+  if( !f ) return NULL;
+  f->estack = hl_malloc(h, 100 * sizeof(hlValue_t));
+  f->ins = hl_malloc(h, 100 * sizeof(unsigned));
+  f->ep = 0;
+  f->ip = 0;
+  f->state = h;
+  return f;
+}
+
 void hl_init( hlState_t* h ){
   h->error = 0;
-  h->ins = hl_malloc(h, 100 * sizeof(unsigned));
-  h->estack = hl_malloc(h, 100 * sizeof(hlValue_t));
   h->vstack = hl_malloc(h, 100 * sizeof(hlValue_t));
+  h->global = funcstate(h);
+  h->fs = h->global;
   h->ctok.type = -1;
   h->ptr = 0;
-  h->ip = 0;
-  h->ep = 0;
   h->vp = 0;
 }
 
@@ -801,6 +812,7 @@ static void expression( hlState_t* s ){
 
 /*
 valuesuffix ::=
+  `.` Name `(` expressionlist `)` valuesuffix |
   `:` Name valuesuffix |
   `[` expression `]` valuesuffix |  
   `(` expressionlist `)` valuesuffix |
@@ -810,7 +822,15 @@ valuesuffix ::=
 static void valuesuffix( hlState_t* s ){
 value_suffix:
   hl_eabort(s);
-  if( accept(s, tk_col) ){
+  if( accept(s, tk_per) ){
+    expect(s, tk_name);
+    expect(s, tk_lp);
+    if( !accept(s, tk_rp) ){
+      expressionlist(s);
+      expect(s, tk_rp);
+    }
+    goto value_suffix;
+  } else if( accept(s, tk_col) ){
     expect(s, tk_name);
     goto value_suffix;
   } else if( accept(s, tk_lbrk) ){
@@ -998,11 +1018,11 @@ void hl_pstart( hlState_t* s ){
 #define pop(x) x->estack[--(x->ep)]
 #define top(x) x->estack[(x->ep)++]
 
-static hlNum_t popn( hlState_t* s ){
+static hlNum_t popn( hlFunc_t* s ){
   hlValue_t* v = &(pop(s));
   hlNum_t n = 0;
   if( v->t != numtype ){
-    s->error = 1;
+    s->state->error = 1;
     fprintf(stderr, "invalid operand\n");
   } else {
     n = v->v.n;
@@ -1011,41 +1031,42 @@ static hlNum_t popn( hlState_t* s ){
 }
 
 void hl_vrun( hlState_t* s ){
-  int p = 0, m = s->ip;
+  hlFunc_t* f = s->global;
+  int p = 0, m = f->ip;
   hl_eabort(s);
   for( ; p < m; p++ ){
-    int op = s->ins[p] >> 16;
-    int arg = s->ins[p] & 0xffff;
+    int op = f->ins[p] >> 16;
+    int arg = f->ins[p] & 0xffff;
     switch( op ){
       case OP_PUSHVAL: {
-        top(s) = s->vstack[arg];
+        top(f) = s->vstack[arg];
       } break;
       case OP_ADD: {
-        hlNum_t r = popn(s);
-        hlNum_t l = popn(s);
+        hlNum_t r = popn(f);
+        hlNum_t l = popn(f);
         hl_eabort(s);
-        top(s).v.n = l + r;
+        top(f).v.n = l + r;
       } break;
       case OP_DIV: {
-        hlNum_t r = popn(s);
-        hlNum_t l = popn(s);
+        hlNum_t r = popn(f);
+        hlNum_t l = popn(f);
         hl_eabort(s);
-        top(s).v.n = l / r;
+        top(f).v.n = l / r;
       } break;
       case OP_SUB: {
-        hlNum_t r = popn(s);
-        hlNum_t l = popn(s);
+        hlNum_t r = popn(f);
+        hlNum_t l = popn(f);
         hl_eabort(s);
-        top(s).v.n = l - r;
+        top(f).v.n = l - r;
       } break;
       case OP_MULT: {
-        hlNum_t r = popn(s);
-        hlNum_t l = popn(s);
+        hlNum_t r = popn(f);
+        hlNum_t l = popn(f);
         hl_eabort(s);
-        top(s).v.n = l * r;
+        top(f).v.n = l * r;
       } break;
       default: break;
     }
   }
-  printf("Result: %f\n", s->estack[s->ep - 1].v.n);
+  printf("Result: %f\n", f->estack[f->ep - 1].v.n);
 }
