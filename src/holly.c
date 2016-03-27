@@ -50,7 +50,11 @@ enum {
   OP_ADD,
   OP_SUB,
   OP_MULT,
-  OP_DIV
+  OP_DIV,
+  OP_JMP,
+  OP_CALL,
+  OP_EXIT,
+  OP_LOG /* temporary */
 };
 
 enum {
@@ -58,7 +62,8 @@ enum {
   strtype,
   booltype,
   objtype,
-  arraytype
+  arraytype,
+  functype
 };
 
 static void ipush( hlState_t* h, int op, int arg ){
@@ -102,6 +107,15 @@ static int vpushnum( hlState_t* h, hlNum_t n ){
   return i;
 }
 
+static int vpushfunc( hlState_t* h, hlFunc_t* f ){
+  int i = h->vp++;
+  hlValue_t v;
+  v.v.f = f;
+  v.t = functype;
+  h->vstack[i] = v;
+  return i;
+}
+
 static hlFunc_t* funcstate( hlState_t* h ){
   hlFunc_t* f = hl_malloc(h, sizeof(hlFunc_t));
   if( !f ) return NULL;
@@ -110,6 +124,7 @@ static hlFunc_t* funcstate( hlState_t* h ){
   f->ep = 0;
   f->ip = 0;
   f->state = h;
+  f->scan = 0;
   return f;
 }
 
@@ -277,13 +292,13 @@ typedef enum {
   tk_iseq,   tk_eq,     tk_let,    tk_if,      tk_else,   tk_return, 
   tk_while,  tk_fn,     tk_true,   tk_false,   tk_nil,    tk_for,    
   tk_in,     tk_break,  tk_land,   tk_lor,     tk_str,    tk_num,     
-  tk_object, tk_array,  tk_bool,   tk_function, tk_Nil,
+  tk_object, tk_array,  tk_bool,   tk_function, tk_Nil,   tk_log, /* temporary */
   tk_string,  tk_number, tk_boolean,
   tk_name,   tk_eof
 } token;
 
 static const int tkSymCnt = 42;
-static const int tkCnt = 63;
+static const int tkCnt = 64;
 
 static const char* hlTkns[] = {
   "|=", "-=", "+=", "*=", "^=", "/=", "%=", ">>=",
@@ -294,7 +309,7 @@ static const char* hlTkns[] = {
   "if", "else", "return", "while", "fn", "true",
   "false", "nil", "for", "in", "break", "and", "or",
   "String", "Number", "Object", "Array", 
-  "Boolean", "Function", "Nil",
+  "Boolean", "Function", "Nil", "log",
   "<string>", "<number>", "<boolean>", "<name>", "<eof>"
 };
 
@@ -426,19 +441,6 @@ static void next( hlState_t* s ){
   int i, x;
   unsigned char* p = s->prog;
   hl_eabort(s);
-
-  /* possibly free previous token data here 
-     probably not, so we can pass the data to the vm */
-  if( s->ctok.type == tk_name ){
-    printf("token: <name> : %s\n", s->ctok.data.data);
-  } else if( s->ctok.type == tk_string ){
-    printf("token: <string> \"%s\"\n", s->ctok.data.data);
-  } else if( s->ctok.type == tk_number ){
-    printf("token: <number> %f\n", s->ctok.data.number);
-  } else {
-    printf("token: %s\n", hlTkns[s->ctok.type]);
-  }
-
   while( hl_isspace(p[s->ptr]) ) s->ptr++; 
   /* inline comments start with -- */
   if( hl_ismatch(p + s->ptr, "--", 2) ){
@@ -488,6 +490,7 @@ static void next( hlState_t* s ){
       if( str ){
         s->ctok.type = tk_string; 
         s->ctok.data.data = str;
+        s->ctok.l = i - 1;
         s->ptr += (i + 1);
       }
       return;
@@ -853,15 +856,25 @@ ifstatement ::=
 */
 
 static void ifstatement( hlState_t* s ){
+  int i = 0;
+  hlFunc_t* state = s->fs;
   hl_eabort(s);
   expect(s, tk_if);
   expression(s);
+  /* jpm */
+  ipush(s, OP_JMP, 0);
   if( peek(s, tk_lbrc) ){
+    hlFunc_t* b = funcstate(s);
+    s->fs = b;
     block(s);
-    elsestatement(s);
-  } else {
+    s->fs = state;
+    i = vpushfunc(s, b);
+    ipush(s, OP_PUSHVAL, i);
+    ipush(s, OP_CALL, 0);
+    /*elsestatement(s);*/
+  } /*else {
     statement(s);
-  }
+  }*/
 }
 
 /*
@@ -983,6 +996,9 @@ static void statement( hlState_t* s ){
     } else {
       /* must be a functioncall */
     }
+  } else if( accept(s, tk_log) ){
+    expression(s);
+    ipush(s, OP_LOG, 0);
   } else {
     hl_error(s, "unexpected", hlTkns[s->ctok.type]);
   }
@@ -1013,10 +1029,14 @@ void hl_pstart( hlState_t* s ){
   hl_eabort(s);
   next(s);
   statementlist(s);
+  ipush(s, OP_EXIT, 0);
 }
 
 #define pop(x) x->estack[--(x->ep)]
 #define top(x) x->estack[(x->ep)++]
+
+#define getop(x)  x->ins[x->scan] >> 16
+#define getarg(x) x->ins[x->scan] & 0xffff
 
 static hlNum_t popn( hlFunc_t* s ){
   hlValue_t* v = &(pop(s));
@@ -1031,13 +1051,55 @@ static hlNum_t popn( hlFunc_t* s ){
 }
 
 void hl_vrun( hlState_t* s ){
-  hlFunc_t* f = s->global;
-  int p = 0, m = f->ip;
+  hlFunc_t* frames[256], *f;
+  int fp = 0;
+  f = frames[fp] = s->global;
   hl_eabort(s);
-  for( ; p < m; p++ ){
-    int op = f->ins[p] >> 16;
-    int arg = f->ins[p] & 0xffff;
+  for( ; ; f->scan++ ){
+    int op, arg;
+    if( f->scan >= f->ip ){
+      if( fp > 0 ){ /* unnest */
+        f = frames[--fp];
+        f->scan++;
+      } else goto exit_vm;
+    }
+    op = getop(f);
+    arg = getarg(f);
     switch( op ){
+      case OP_LOG: {
+        /* temporary */
+        hlValue_t d = pop(f);
+        switch( d.t ){
+          case 0: 
+            printf("Number: %f\n", d.v.n); 
+            break;
+          case 1: 
+            printf("String: %s\n", d.v.s->l > HL_PTR_SIZE ? d.v.s->str.l : d.v.s->str.s ); 
+            break;
+          case 2: 
+            printf("Boolean: %s\n", d.v.b ? "true" : "false"); 
+            break;
+          case 3: 
+            printf("Object\n"); 
+            break;
+          case 4: 
+            printf("Array\n"); 
+            break;
+          case 5: 
+            printf("Function\n"); 
+            break;
+        }
+      } break;
+      case OP_CALL: {
+        hlFunc_t* b = pop(f).v.f;
+        f = frames[++fp] = b;
+        f->scan = -1; /* this will get incremented */
+      } break;
+      case OP_JMP: {
+        hlNum_t b = popn(f);
+        hl_eabort(s);
+        if( !b ) f->scan += 2;
+      } break;
       case OP_PUSHVAL: {
         top(f) = s->vstack[arg];
       } break;
@@ -1065,8 +1127,12 @@ void hl_vrun( hlState_t* s ){
         hl_eabort(s);
         top(f).v.n = l * r;
       } break;
+      case OP_EXIT: {
+exit_vm:
+        /* free resources */
+        return;
+      } break;
       default: break;
     }
   }
-  printf("Result: %f\n", f->estack[f->ep - 1].v.n);
 }

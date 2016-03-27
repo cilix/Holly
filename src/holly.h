@@ -109,6 +109,7 @@ struct _hlFunc_t {
   unsigned*      ins;
   int            ip;
   int            ep;
+  int            scan;
 };
 
 /*
