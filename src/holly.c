@@ -52,9 +52,11 @@ enum {
   OP_MULT,
   OP_DIV,
   OP_JMP,
+  OP_JMPT,
   OP_CALL,
   OP_EXIT,
-  OP_LOG /* temporary */
+  OP_LOG, /* temporary */
+  OP_POP
 };
 
 enum {
@@ -69,6 +71,11 @@ enum {
 static void ipush( hlState_t* h, int op, int arg ){
   h->fs->ins[h->fs->ip++] = (op << 16) | arg;
   /* realloc here */
+}
+
+static void adjustarg( hlState_t* h, int off, int arg ){
+  h->fs->ins[off] &= 0xffff0000;
+  h->fs->ins[off] |= arg;
 }
 
 /* value stack */
@@ -326,7 +333,7 @@ static const char* hlTkns[] = {
   else if( hl_ishex(x) ) x = 10 + (x - 'a'); \
 } while( 0 )
 
-static unsigned char pEsc( unsigned char* p, int* i ){
+static unsigned char pesc( unsigned char* p, int* i ){
   unsigned char c = *p;
   switch( c ){
     case 'a': c = '\a'; break;
@@ -358,7 +365,7 @@ static unsigned char* pstring( hlState_t* s, unsigned char* v, int l ){
   while( i < l ){
     c = v[i++];
     if( c == '\\' ){
-      e = pEsc(v + i, &i);
+      e = pesc(v + i, &i);
       if( e ) b[j++] = e;
     } else {
       b[j++] = c;
@@ -857,12 +864,14 @@ ifstatement ::=
 
 static void ifstatement( hlState_t* s ){
   int i = 0;
+  int ip;
   hlFunc_t* state = s->fs;
   hl_eabort(s);
   expect(s, tk_if);
   expression(s);
   /* jpm */
   ipush(s, OP_JMP, 0);
+  ip = state->ip - 1;
   if( peek(s, tk_lbrc) ){
     hlFunc_t* b = funcstate(s);
     s->fs = b;
@@ -871,30 +880,30 @@ static void ifstatement( hlState_t* s ){
     i = vpushfunc(s, b);
     ipush(s, OP_PUSHVAL, i);
     ipush(s, OP_CALL, 0);
-    /*elsestatement(s);*/
-  } /*else {
-    statement(s);
-  }*/
-}
-
-/*
-elsestatement ::=
-  `else` block |
-  `else` statement |
-  `else` ifstatement |
-  nil
-*/
-
-static void elsestatement( hlState_t* s ){
-  hl_eabort(s);
-  if( accept(s, tk_else) ){
-    if( peek(s, tk_lbrc) ){
-      block(s);
-    } else if( peek(s, tk_if) ){
-      ifstatement(s);
-    } else {
-      statement(s);
+    adjustarg(s, ip, state->ip - ip);
+    if( accept(s, tk_else) ){
+      ipush(s, OP_POP, 0);
+      ipush(s, OP_JMPT, 0);
+      ip = state->ip - 1;
+      if( peek(s, tk_if) ){
+        ifstatement(s);
+      } else if( peek(s, tk_lbrc) ){
+        hlFunc_t* b = funcstate(s);
+        s->fs = b;
+        block(s);
+        s->fs = state;
+        i = vpushfunc(s, b);
+        ipush(s, OP_PUSHVAL, i);
+        ipush(s, OP_CALL, 0);
+        adjustarg(s, ip, state->ip - ip);
+      } else {
+        statement(s);
+        adjustarg(s, ip, state->ip - ip);
+      }
     }
+  } else {
+    statement(s);
+    adjustarg(s, ip, state->ip - ip);
   }
 }
 
@@ -1090,6 +1099,10 @@ void hl_vrun( hlState_t* s ){
             break;
         }
       } break;
+      case OP_POP: {
+        (f->ep)--;
+        break;
+      }
       case OP_CALL: {
         hlFunc_t* b = pop(f).v.f;
         f = frames[++fp] = b;
@@ -1098,7 +1111,12 @@ void hl_vrun( hlState_t* s ){
       case OP_JMP: {
         hlNum_t b = popn(f);
         hl_eabort(s);
-        if( !b ) f->scan += 2;
+        if( !b ) f->scan += arg - 1;
+      } break;
+      case OP_JMPT: {
+        hlNum_t b = popn(f);
+        hl_eabort(s);
+        if( b ) f->scan += arg - 1;
       } break;
       case OP_PUSHVAL: {
         top(f) = s->vstack[arg];

@@ -1,14 +1,17 @@
 h = 5 + (2 / 3) + 6 * 9
 
 if 1 {
-  log 1 + 2 + 3
+  log 1 + ((2 + 3) * 4)
 
-  if 1 - 1 + 2 - 1 {
+  if 1 - 1 + 2 - 2 {
     log "this better work"
-  }
+  } else {
+    log "this better not"
+  } 
+  
 }
 
-log "hello"
+log "hello, world!!!!!!!"
 log false
 
 /-
