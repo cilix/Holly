@@ -612,10 +612,17 @@ block ::=
 */
 
 static void block( hlState_t* s ){
+  int i;
+  hlFunc_t* state = s->fs;
+  hlFunc_t* b = funcstate(s);
   hl_eabort(s);
+  s->fs = b;
   expect(s, tk_lbrc);
   statementlist(s);
   expect(s, tk_rbrc);
+  s->fs = state;
+  i = vpushfunc(s, b);
+  ipush(s, OP_PUSHVAL, i);
 }
 
 /*
@@ -863,46 +870,46 @@ ifstatement ::=
 */
 
 static void ifstatement( hlState_t* s ){
-  int i = 0;
   int ip;
   hlFunc_t* state = s->fs;
   hl_eabort(s);
   expect(s, tk_if);
   expression(s);
-  /* jpm */
   ipush(s, OP_JMP, 0);
   ip = state->ip - 1;
   if( peek(s, tk_lbrc) ){
-    hlFunc_t* b = funcstate(s);
-    s->fs = b;
     block(s);
-    s->fs = state;
-    i = vpushfunc(s, b);
-    ipush(s, OP_PUSHVAL, i);
     ipush(s, OP_CALL, 0);
-    adjustarg(s, ip, state->ip - ip);
-    if( accept(s, tk_else) ){
-      ipush(s, OP_POP, 0);
-      ipush(s, OP_JMPT, 0);
-      ip = state->ip - 1;
-      if( peek(s, tk_if) ){
-        ifstatement(s);
-      } else if( peek(s, tk_lbrc) ){
-        hlFunc_t* b = funcstate(s);
-        s->fs = b;
-        block(s);
-        s->fs = state;
-        i = vpushfunc(s, b);
-        ipush(s, OP_PUSHVAL, i);
-        ipush(s, OP_CALL, 0);
-        adjustarg(s, ip, state->ip - ip);
-      } else {
-        statement(s);
-        adjustarg(s, ip, state->ip - ip);
-      }
-    }
   } else {
     statement(s);
+  }
+  adjustarg(s, ip, state->ip - ip);
+  elsestatement(s);
+}
+
+/*
+elsestatement ::=
+  `else` block |
+  `else` statement |
+  `else` ifstatement |
+  nil
+*/
+
+static void elsestatement( hlState_t* s ){
+  int ip;
+  hlFunc_t* state = s->fs;
+  hl_eabort(s);
+  if( accept(s, tk_else) ){
+    ipush(s, OP_JMPT, 0);
+    ip = state->ip - 1;
+    if( peek(s, tk_if) ){
+      ifstatement(s);
+    } else if( peek(s, tk_lbrc) ){
+      block(s);
+      ipush(s, OP_CALL, 0);
+    } else {
+      statement(s);
+    }
     adjustarg(s, ip, state->ip - ip);
   }
 }
@@ -1059,6 +1066,14 @@ static hlNum_t popn( hlFunc_t* s ){
   return n;
 }
 
+static void printstr( hlString_t* str ){
+  int i = 0;
+  int l = str->l;
+  unsigned char* s = l > HL_PTR_SIZE ? str->str.l : str->str.s;
+  for( ; i < l; i++) putchar(s[i]);
+  printf("\n");
+}
+
 void hl_vrun( hlState_t* s ){
   hlFunc_t* frames[256], *f;
   int fp = 0;
@@ -1080,13 +1095,13 @@ void hl_vrun( hlState_t* s ){
         hlValue_t d = pop(f);
         switch( d.t ){
           case 0: 
-            printf("Number: %f\n", d.v.n); 
+            printf("%f\n", d.v.n); 
             break;
           case 1: 
-            printf("String: %s\n", d.v.s->l > HL_PTR_SIZE ? d.v.s->str.l : d.v.s->str.s ); 
+            printstr(d.v.s);
             break;
           case 2: 
-            printf("Boolean: %s\n", d.v.b ? "true" : "false"); 
+            printf("%s\n", d.v.b ? "true" : "false"); 
             break;
           case 3: 
             printf("Object\n"); 
@@ -1101,6 +1116,7 @@ void hl_vrun( hlState_t* s ){
       } break;
       case OP_POP: {
         (f->ep)--;
+        /* free resources */
         break;
       }
       case OP_CALL: {
@@ -1112,11 +1128,13 @@ void hl_vrun( hlState_t* s ){
         hlNum_t b = popn(f);
         hl_eabort(s);
         if( !b ) f->scan += arg - 1;
+        f->ep++;
       } break;
       case OP_JMPT: {
         hlNum_t b = popn(f);
         hl_eabort(s);
         if( b ) f->scan += arg - 1;
+        f->ep++;
       } break;
       case OP_PUSHVAL: {
         top(f) = s->vstack[arg];
