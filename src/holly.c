@@ -52,6 +52,7 @@ enum {
   OP_MULT,
   OP_DIV,
   OP_JMP,
+  OP_JMPF,
   OP_JMPT,
   OP_CALL,
   OP_EXIT,
@@ -121,6 +122,10 @@ static int vpushfunc( hlState_t* h, hlFunc_t* f ){
   v.t = functype;
   h->vstack[i] = v;
   return i;
+}
+
+static void pushname( hlState_t* h ){
+  /* add to name array */
 }
 
 static hlFunc_t* funcstate( hlState_t* h ){
@@ -875,7 +880,7 @@ static void ifstatement( hlState_t* s ){
   hl_eabort(s);
   expect(s, tk_if);
   expression(s);
-  ipush(s, OP_JMP, 0);
+  ipush(s, OP_JMPF, 0);
   ip = state->ip - 1;
   if( peek(s, tk_lbrc) ){
     block(s);
@@ -921,14 +926,22 @@ whilestatement ::=
 */
 
 static void whilestatement( hlState_t* s ){
+  int ip, jmp;
+  hlFunc_t* state = s->fs;
   hl_eabort(s);
   expect(s, tk_while);
+  jmp = state->ip;
   expression(s);
+  ipush(s, OP_JMPF, 0);
+  ip = state->ip - 1;
   if( peek(s, tk_lbrc) ){
     block(s);
+    ipush(s, OP_CALL, 0);
   } else {
     statement(s);
   }
+  ipush(s, OP_JMP, jmp);
+  adjustarg(s, ip, state->ip - ip);
 }
 
 /*
@@ -1125,6 +1138,9 @@ void hl_vrun( hlState_t* s ){
         f->scan = -1; /* this will get incremented */
       } break;
       case OP_JMP: {
+        f->scan += arg - 1;
+      } break;
+      case OP_JMPF: {
         hlNum_t b = popn(f);
         hl_eabort(s);
         if( !b ) f->scan += arg - 1;
