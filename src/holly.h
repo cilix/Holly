@@ -104,7 +104,7 @@ struct _hlValue_t {
 struct _hlFunc_t {
   hlFunc_t*      env;
   hlState_t*     state;
-  hlHashTable_t* locals;
+  hlHashTable_t  locals;
   hlValue_t*     estack;
   unsigned*      ins;
   int            ip;
@@ -144,6 +144,7 @@ struct _hlState_t {
   int            ptr;
   hlToken_t      ctok;
   unsigned char* prog;
+
   /* vm */
   hlFunc_t*      fs; /* current function state */
   hlFunc_t*      global; /* global state */

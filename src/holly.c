@@ -57,7 +57,9 @@ enum {
   OP_CALL,
   OP_EXIT,
   OP_LOG, /* temporary */
-  OP_POP
+  OP_POP,
+  OP_SLOCAL,
+  OP_GLOCAL
 };
 
 enum {
@@ -66,7 +68,8 @@ enum {
   booltype,
   objtype,
   arraytype,
-  functype
+  functype,
+  niltype
 };
 
 static void ipush( hlState_t* h, int op, int arg ){
@@ -124,8 +127,13 @@ static int vpushfunc( hlState_t* h, hlFunc_t* f ){
   return i;
 }
 
-static void pushname( hlState_t* h ){
-  /* add to name array */
+static int vpushnil( hlState_t* h ){
+  int i = h->vp++;
+  hlValue_t v;
+  v.v.n = 0;
+  v.t = niltype;
+  h->vstack[i] = v;
+  return i;
 }
 
 static hlFunc_t* funcstate( hlState_t* h ){
@@ -133,10 +141,12 @@ static hlFunc_t* funcstate( hlState_t* h ){
   if( !f ) return NULL;
   f->estack = hl_malloc(h, 100 * sizeof(hlValue_t));
   f->ins = hl_malloc(h, 100 * sizeof(unsigned));
+  f->locals = hl_hinit(h);
   f->ep = 0;
   f->ip = 0;
   f->state = h;
   f->scan = 0;
+  f->env = NULL;
   return f;
 }
 
@@ -620,6 +630,7 @@ static void block( hlState_t* s ){
   int i;
   hlFunc_t* state = s->fs;
   hlFunc_t* b = funcstate(s);
+  b->env = state;
   hl_eabort(s);
   s->fs = b;
   expect(s, tk_lbrc);
@@ -779,7 +790,11 @@ static void value( hlState_t* s ){
   } else if( peek(s, tk_fn) ){
     lambda(s);
   } else {
+    int i, l = s->ctok.l;
+    unsigned char* n = s->ctok.data.data;
     expect(s, tk_name);
+    i = vpushstr(s, n, l);
+    ipush(s, OP_GLOCAL, i);
     valuesuffix(s);
   }
 }
@@ -807,7 +822,7 @@ static void expression( hlState_t* s ){
     int i = vpushbool(s, s->ctok.data.number);
     ipush(s, OP_PUSHVAL, i);
   } else if( accept(s, tk_nil) ){
-    /* emit */
+    ipush(s, OP_PUSHVAL, vpushnil(s));
   } else if( unop(s) ){
     next(s);
     expression(s);
@@ -1010,11 +1025,17 @@ static void statement( hlState_t* s ){
   } else if( peek(s, tk_break) ){
     return;
   } else if( accept(s, tk_let) ){
+    int i, l = s->ctok.l;
+    unsigned char* n = s->ctok.data.data;
     expect(s, tk_name);
-    if( assignment(s) ){
+    if( s->ctok.type == tk_eq ){
       next(s);
       expression(s);
+    } else {
+      ipush(s, OP_PUSHVAL, vpushnil(s));
     }
+    i = vpushstr(s, n, l);
+    ipush(s, OP_SLOCAL, i);
   } else if( peek(s, tk_fn) ){
     functionstatement(s);
   } else if( peek(s, tk_name) ){
@@ -1106,6 +1127,7 @@ void hl_vrun( hlState_t* s ){
       case OP_LOG: {
         /* temporary */
         hlValue_t d = pop(f);
+        hl_eabort(s);
         switch( d.t ){
           case 0: 
             printf("%f\n", d.v.n); 
@@ -1154,6 +1176,29 @@ void hl_vrun( hlState_t* s ){
       } break;
       case OP_PUSHVAL: {
         top(f) = s->vstack[arg];
+      } break;
+      case OP_SLOCAL: {
+        hlValue_t c = s->vstack[arg];
+        hlValue_t v = pop(f);
+        hl_hset(&f->locals, c.v.s->str.s, c.v.s->l, &v);
+      } break;
+      case OP_GLOCAL: {
+        int i;
+        hlFunc_t* state = f;
+        hlValue_t c = s->vstack[arg];
+        while( state ){
+          i = hl_hget(&state->locals, c.v.s->str.s, c.v.s->l);
+          if( i == -1 ){
+            state = state->env;
+          } else {
+            top(f) = *(hlValue_t *)(state->locals.t[i].v);
+            break;
+          }
+        }
+        if( i == -1 ){
+          s->error = 1;
+          fprintf(stderr, "undeclared variable %s\n", c.v.s->str.s);
+        }
       } break;
       case OP_ADD: {
         hlNum_t r = popn(f);

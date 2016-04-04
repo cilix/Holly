@@ -1,7 +1,9 @@
-h = 5 + (2 / 3) + 6 * 9
+let h = 5 + (2 / 3) + 6 * 9
 
-if 0 {
-  log "this is true"
+log h
+
+if 1 {
+  log h + 2
 } else if 0 {
   log "this is false"
 } else if 0 {
@@ -10,10 +12,11 @@ if 0 {
   log "you"
 }
 
-if 1 - 1 log "please log"
+if 1 - 1
+  log "please log"
 else if 0 log "please dont"
 else { 
-  if 0 log "yes" 
+  if 0 log "yes" else log "no"
 }
 
 log "um, hello, world!!!!!!!"
