@@ -59,7 +59,14 @@ enum {
   OP_LOG, /* temporary */
   OP_POP,
   OP_SLOCAL,
-  OP_GLOCAL
+  OP_GLOCAL,
+  OP_LEQ,
+  OP_GEQ,
+  OP_ISEQ,
+  OP_LAND,
+  OP_LOR,
+  OP_LT,
+  OP_GT
 };
 
 enum {
@@ -96,12 +103,7 @@ static int vpushstr( hlState_t* h, unsigned char* s, int l ){
   int i = h->vp++;
   hlValue_t v;
   hlString_t* c = hl_malloc(h, sizeof(hlString_t));
-  if( l <= HL_PTR_SIZE ){
-    memcpy(c->str.s, s, l);
-    free(s);
-  } else {
-    c->str.l = s;
-  }
+  c->data = s;
   c->l = l;
   v.v.s = c;
   v.t = strtype;
@@ -596,10 +598,8 @@ static int assignment( hlState_t* s ){
     tok == tk_modeq    ||
     tok == tk_rseq     ||
     tok == tk_lseq     ||
-    tok == tk_aeq      ||
-    tok == tk_leq      ||
     tok == tk_eq       ||
-    tok == tk_geq;
+    tok == tk_aeq;
 }
 
 static int binop( hlState_t* s ){
@@ -618,6 +618,8 @@ static int binop( hlState_t* s ){
     tok == tk_lt        ||
     tok == tk_band      ||
     tok == tk_ast       ||
+    tok == tk_leq       ||
+    tok == tk_geq       ||
     tok == tk_iseq;
 }
 
@@ -835,10 +837,17 @@ static void expression( hlState_t* s ){
   if( binop(s) ){
     int op = 0;
     switch( s->ctok.type ){
-      case tk_sub: op = OP_SUB; break;
-      case tk_add: op = OP_ADD; break;
-      case tk_div: op = OP_DIV; break;
-      case tk_ast: op = OP_MULT; break;
+      case tk_sub:  op = OP_SUB; break;
+      case tk_add:  op = OP_ADD; break;
+      case tk_div:  op = OP_DIV; break;
+      case tk_ast:  op = OP_MULT; break;
+      case tk_leq:  op = OP_LEQ; break;
+      case tk_geq:  op = OP_GEQ; break;
+      case tk_iseq: op = OP_ISEQ; break;
+      case tk_land: op = OP_LAND; break;
+      case tk_lor:  op = OP_LOR; break;
+      case tk_gt:   op = OP_GT; break;
+      case tk_lt:   op = OP_LT; break;
       default: break;
     }
     next(s);
@@ -1088,6 +1097,10 @@ void hl_pstart( hlState_t* s ){
 #define getop(x)  x->ins[x->scan] >> 16
 #define getarg(x) x->ins[x->scan] & 0xffff
 
+#define istruthy(x) ((x.t == numtype && x.v.n != 0.0f) \
+   || (x.t == booltype && x.v.b != 0) \
+   || (x.t != niltype && x.t != numtype && x.t != booltype))
+
 static hlNum_t popn( hlFunc_t* s ){
   hlValue_t* v = &(pop(s));
   hlNum_t n = 0;
@@ -1103,8 +1116,7 @@ static hlNum_t popn( hlFunc_t* s ){
 static void printstr( hlString_t* str ){
   int i = 0;
   int l = str->l;
-  unsigned char* s = l > HL_PTR_SIZE ? str->str.l : str->str.s;
-  for( ; i < l; i++) putchar(s[i]);
+  for( ; i < l; i++) putchar(str->data[i]);
   printf("\n");
 }
 
@@ -1160,18 +1172,16 @@ void hl_vrun( hlState_t* s ){
         f->scan = -1; /* this will get incremented */
       } break;
       case OP_JMP: {
-        f->scan += arg - 1;
+        f->scan = arg;
       } break;
       case OP_JMPF: {
-        hlNum_t b = popn(f);
-        hl_eabort(s);
-        if( !b ) f->scan += arg - 1;
+        hlValue_t v = pop(f);
+        if( !istruthy(v) ) f->scan += arg - 1;
         f->ep++;
       } break;
       case OP_JMPT: {
-        hlNum_t b = popn(f);
-        hl_eabort(s);
-        if( b ) f->scan += arg - 1;
+        hlValue_t v = pop(f);
+        if( istruthy(v) ) f->scan += arg - 1;
         f->ep++;
       } break;
       case OP_PUSHVAL: {
@@ -1180,14 +1190,14 @@ void hl_vrun( hlState_t* s ){
       case OP_SLOCAL: {
         hlValue_t c = s->vstack[arg];
         hlValue_t v = pop(f);
-        hl_hset(&f->locals, c.v.s->str.s, c.v.s->l, &v);
+        hl_hset(&f->locals, c.v.s->data, c.v.s->l, &v);
       } break;
       case OP_GLOCAL: {
         int i;
         hlFunc_t* state = f;
         hlValue_t c = s->vstack[arg];
         while( state ){
-          i = hl_hget(&state->locals, c.v.s->str.s, c.v.s->l);
+          i = hl_hget(&state->locals, c.v.s->data, c.v.s->l);
           if( i == -1 ){
             state = state->env;
           } else {
@@ -1197,7 +1207,7 @@ void hl_vrun( hlState_t* s ){
         }
         if( i == -1 ){
           s->error = 1;
-          fprintf(stderr, "undeclared variable %s\n", c.v.s->str.s);
+          fprintf(stderr, "undeclared variable %s\n", c.v.s->data);
         }
       } break;
       case OP_ADD: {
@@ -1223,6 +1233,73 @@ void hl_vrun( hlState_t* s ){
         hlNum_t l = popn(f);
         hl_eabort(s);
         top(f).v.n = l * r;
+      } break;
+      case OP_LT: {
+        hlNum_t r = popn(f);
+        hlNum_t l = popn(f);
+        hlValue_t b;
+        hl_eabort(s);
+        b.v.b = l < r;
+        b.t = booltype;
+        top(f) = b;
+      } break;
+      case OP_GT: {
+        hlNum_t r = popn(f);
+        hlNum_t l = popn(f);
+        hlValue_t b;
+        hl_eabort(s);
+        b.v.b = l > r;
+        b.t = booltype;
+        top(f) = b;
+      } break;
+      case OP_LEQ: {
+        hlNum_t r = popn(f);
+        hlNum_t l = popn(f);
+        hlValue_t b;
+        hl_eabort(s);
+        b.v.b = l <= r;
+        b.t = booltype;
+        top(f) = b;
+      } break;
+      case OP_GEQ: {
+        hlNum_t r = popn(f);
+        hlNum_t l = popn(f);
+        hlValue_t b;
+        hl_eabort(s);
+        b.v.b = l >= r;
+        b.t = booltype;
+        top(f) = b;
+      } break;
+      case OP_ISEQ: {
+        hlValue_t r = pop(f);
+        hlValue_t l = pop(f);
+        hlValue_t b;
+        b.t = booltype;
+        if( r.t != l.t ){
+          b.v.b = 0;
+        } else if( r.t == numtype ){
+          b.v.b = r.v.n == l.v.n;
+        } else if( r.t == strtype ){
+          b.v.b = r.v.s->l == l.v.s->l && 
+          !memcmp(r.v.s->data, l.v.s->data, r.v.s->l);
+        }
+        top(f) = b;
+      } break;
+      case OP_LAND: {
+        hlValue_t r = pop(f);
+        hlValue_t l = pop(f);
+        hlValue_t b;
+        b.t = booltype;
+        b.v.b = (istruthy(l) && istruthy(r));
+        top(f) = b;
+      } break;
+      case OP_LOR: {
+        hlValue_t r = pop(f);
+        hlValue_t l = pop(f);
+        hlValue_t b;
+        b.t = booltype;
+        b.v.b = (istruthy(l) || istruthy(r));
+        top(f) = b;
       } break;
       case OP_EXIT: {
 exit_vm:

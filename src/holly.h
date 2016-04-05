@@ -68,10 +68,7 @@ typedef struct _hlFunc_t  hlFunc_t;
 
 typedef struct {
   int l;
-  union {
-    unsigned char  s[HL_PTR_SIZE]; 
-    unsigned char* l;
-  } str;
+  unsigned char* data;
 } hlString_t;
 
 typedef struct {
