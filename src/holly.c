@@ -338,7 +338,7 @@ static const char* hlTkns[] = {
 };
 
 #define hl_ismatch(x, y, z) (!strncmp((const char *)x, (const char *)y, z))
-#define hl_isspace(x)       (x == ' ' || x == '\t' || x == '\n')
+#define hl_isspace(x)       (x == ' ' || x == '\t' || x == '\n' || x == '\r')
 #define hl_isdigit(x)       (x >= '0' && x <= '9')
 #define hl_islower(x)       (x >= 'a' && x <= 'z')
 #define hl_isupper(x)       (x >= 'A' && x <= 'Z')
