@@ -60,6 +60,7 @@ enum {
   OP_POP,
   OP_SLOCAL,
   OP_GLOCAL,
+  OP_NLOCAL,
   OP_LEQ,
   OP_GEQ,
   OP_ISEQ,
@@ -316,13 +317,13 @@ typedef enum {
   tk_iseq,   tk_eq,     tk_let,    tk_if,      tk_else,   tk_return, 
   tk_while,  tk_fn,     tk_true,   tk_false,   tk_nil,    tk_for,    
   tk_in,     tk_break,  tk_land,   tk_lor,     tk_str,    tk_num,     
-  tk_object, tk_array,  tk_bool,   tk_function, tk_Nil,   tk_log, /* temporary */
-  tk_string,  tk_number, tk_boolean,
+  tk_array,  tk_bool,   tk_function, tk_Nil,   tk_log, /* temporary */
+  tk_struct, tk_use, tk_string,  tk_number, tk_boolean,
   tk_name,   tk_eof
 } token;
 
 static const int tkSymCnt = 42;
-static const int tkCnt = 64;
+static const int tkCnt = 65;
 
 static const char* hlTkns[] = {
   "|=", "-=", "+=", "*=", "^=", "/=", "%=", ">>=",
@@ -332,8 +333,8 @@ static const char* hlTkns[] = {
   "+", "^", "/", "%", ">", "<", "&", "==", "=", "let",
   "if", "else", "return", "while", "fn", "true",
   "false", "nil", "for", "in", "break", "and", "or",
-  "String", "Number", "Object", "Array", 
-  "Boolean", "Function", "Nil", "log",
+  "String", "Number", "Array", 
+  "Boolean", "Function", "Nil", "log", "struct", "use",
   "<string>", "<number>", "<boolean>", "<name>", "<eof>"
 };
 
@@ -437,7 +438,7 @@ static void pnumber( hlState_t* s, unsigned char* p, int x ){
     dec /= pow(10, dc);
     r += dec;
   }
-  s->ctok.data.number = r;
+  s->ctok.value.number = r;
   s->ptr += i;
   s->ctok.type = tk_number;
 }
@@ -451,7 +452,7 @@ static int isreserved( hlState_t* s, unsigned char* str, unsigned l ){
     ) continue;
     if( i == tk_true || i == tk_false ){
       s->ctok.type = tk_boolean; 
-      s->ctok.data.number = (i == tk_true); 
+      s->ctok.value.number = (i == tk_true); 
     } else {
       s->ctok.type = i;
     }
@@ -465,20 +466,22 @@ static void next( hlState_t* s ){
   int i, x;
   unsigned char* p = s->prog;
   hl_eabort(s);
+check_comments:
   while( hl_isspace(p[s->ptr]) ) s->ptr++; 
+  
   /* inline comments start with -- */
   if( hl_ismatch(p + s->ptr, "--", 2) ){
     s->ptr += 2;
-    while( p[s->ptr] != '\n' && p[s->ptr] != 0 ) s->ptr++; 
-    while( hl_isspace(p[s->ptr]) ) s->ptr++; 
+    while( p[s->ptr] != '\n' && p[s->ptr] !='\r' && p[s->ptr] != 0 ) s->ptr++; 
+    goto check_comments; 
   }
    /* block comments start with /- and end with -/ */
   if( hl_ismatch(p + s->ptr, "/-", 2) ){
-    s->ptr += 2;
     while( !hl_ismatch(p + s->ptr, "-/", 2) && p[s->ptr] != 0 ) s->ptr++; 
     s->ptr += 2;
-    while( hl_isspace(p[s->ptr]) ) s->ptr++;
+    goto check_comments;
   }
+
   x = s->ptr;
   if( !p[x] ){
     s->ctok.type = tk_eof;
@@ -513,7 +516,7 @@ static void next( hlState_t* s ){
       str = pstring(s, p + x + 1, i - 1);
       if( str ){
         s->ctok.type = tk_string; 
-        s->ctok.data.data = str;
+        s->ctok.value.data = str;
         s->ctok.l = i - 1;
         s->ptr += (i + 1);
       }
@@ -531,7 +534,7 @@ static void next( hlState_t* s ){
         }
         l = strlen((const char *)str);
         if( !isreserved(s, str, l) ){
-          s->ctok.data.data = str;
+          s->ctok.value.data = str;
           s->ptr += l;
           s->ctok.l = l;
         }
@@ -571,7 +574,6 @@ static int expect( hlState_t* s, token t ){
 
 static void namelist( hlState_t* );
 static void expressionlist( hlState_t* );
-static void pairlist( hlState_t* );
 static void expression( hlState_t* );
 static void ifstatement( hlState_t* );
 static void elsestatement( hlState_t* );
@@ -659,30 +661,6 @@ expression_list:
 }
 
 /*
-spread ::=
-  Number `..` Number  
-*/
-/*
-static void spread( hlState_t* s ){
-  hl_eabort(s);
-  expect(s, tk_number);
-  expect(s, tk_spr);
-  expect(s, tk_number);
-}
-*/
-/*
-object ::=
-  `{` pairlist `}`
-*/
-
-static void object( hlState_t* s ){
-  hl_eabort(s);
-  expect(s, tk_lbrc);
-  pairlist(s);
-  expect(s, tk_rbrc);
-}
-
-/*
 array ::=
   `[` expressionlist `]` | `[` nil `]`
 */
@@ -698,25 +676,6 @@ static void array( hlState_t* s ){
 }
 
 /*
-pairlist ::=
-  Name `:` expression |
-  Name `:` expression `,` pairlist |
-  nil
-*/
-
-static void pairlist( hlState_t* s ){
-pair_list:
-  hl_eabort(s);
-  if( accept(s, tk_name) ){
-    expect(s, tk_col);
-    expression(s);
-    if( accept(s, tk_com) ){
-      goto pair_list;
-    }
-  }
-}
-
-/*
 name ::= 
   Name |
   Name typehint
@@ -728,11 +687,13 @@ static void name( hlState_t* s ){
   if( accept(s, tk_col) ){
     if( accept(s, tk_str)      ||   
         accept(s, tk_num)      ||
-        accept(s, tk_object)   ||
         accept(s, tk_array)    ||
         accept(s, tk_function) ||
         accept(s, tk_Nil)      ||
-        accept(s, tk_bool) ){
+        accept(s, tk_bool)){
+      return;
+    } else if( accept(s, tk_name) ){
+      /* make sure Name corresponds to a declared struct type */
       return;
     } else {
       hl_error(s, "expected", "type declaration");
@@ -777,24 +738,27 @@ static void lambda( hlState_t* s ){
 
 /*
 value ::=
-  object |
   array |
   lambda |
+  Name { expressionlist } |
   Name valuesuffix 
 */
 
 static void value( hlState_t* s ){
   hl_eabort(s);
-  if( peek(s, tk_lbrc) ){
-    object(s);
-  } else if( peek(s, tk_lbrk) ){
+  if( peek(s, tk_lbrk) ){
     array(s);
   } else if( peek(s, tk_fn) ){
     lambda(s);
   } else {
     int i, l = s->ctok.l;
-    unsigned char* n = s->ctok.data.data;
+    unsigned char* n = s->ctok.value.data;
     expect(s, tk_name);
+    if( accept(s, tk_lbrc) ){
+      expressionlist(s);
+      expect(s, tk_rbrc);
+      return;
+    }
     i = vpushstr(s, n, l);
     ipush(s, OP_GLOCAL, i);
     valuesuffix(s);
@@ -815,13 +779,13 @@ static void expression( hlState_t* s ){
      and everything is right assosiative */
   hl_eabort(s);
   if( accept(s, tk_string) ){
-    int i = vpushstr(s, s->ctok.data.data, s->ctok.l);
+    int i = vpushstr(s, s->ctok.value.data, s->ctok.l);
     ipush(s, OP_PUSHVAL, i);
   } else if( accept(s, tk_number) ){
-    int i = vpushnum(s, s->ctok.data.number);
+    int i = vpushnum(s, s->ctok.value.number);
     ipush(s, OP_PUSHVAL, i);
   } else if( accept(s, tk_boolean) ){
-    int i = vpushbool(s, s->ctok.data.number);
+    int i = vpushbool(s, s->ctok.value.number);
     ipush(s, OP_PUSHVAL, i);
   } else if( accept(s, tk_nil) ){
     ipush(s, OP_PUSHVAL, vpushnil(s));
@@ -983,7 +947,8 @@ static void forstatement( hlState_t* s ){
   }
   expect(s, tk_in);
   value(s);
-  if( peek(s, tk_lbrk) ){
+  /* check for spread 0..10 */
+  if( peek(s, tk_lbrc) ){
     block(s);
   } else {
     statement(s);
@@ -1006,6 +971,39 @@ static void functionstatement( hlState_t* s ){
   } else {
     block(s);
   }
+}
+
+/*
+structbody
+  `use` Name structbody |
+  Name structbody |
+  nil
+*/
+
+static void structbody( hlState_t* s ){
+  hl_eabort(s);
+struct_body:
+  if( peek(s, tk_rbrc) ) return;
+  if( accept(s, tk_name) ){
+    goto struct_body;
+  } else if( accept(s, tk_use) ){
+    expect(s, tk_name);
+    goto struct_body;
+  }
+}
+
+/*
+structstatement ::=
+  `struct` Name `{` structbody `}`
+*/
+
+static void structstatement( hlState_t* s ){
+  hl_eabort(s);
+  expect(s, tk_struct);
+  expect(s, tk_name);
+  expect(s, tk_lbrc);
+  structbody(s);
+  expect(s, tk_rbrc);
 }
 
 /*
@@ -1035,7 +1033,7 @@ static void statement( hlState_t* s ){
     return;
   } else if( accept(s, tk_let) ){
     int i, l = s->ctok.l;
-    unsigned char* n = s->ctok.data.data;
+    unsigned char* n = s->ctok.value.data;
     expect(s, tk_name);
     if( s->ctok.type == tk_eq ){
       next(s);
@@ -1044,17 +1042,28 @@ static void statement( hlState_t* s ){
       ipush(s, OP_PUSHVAL, vpushnil(s));
     }
     i = vpushstr(s, n, l);
-    ipush(s, OP_SLOCAL, i);
+    ipush(s, OP_NLOCAL, i);
   } else if( peek(s, tk_fn) ){
     functionstatement(s);
+  } else if( peek(s, tk_struct) ){
+    structstatement(s);
   } else if( peek(s, tk_name) ){
     value(s);
+    /*
+    int i, l = s->ctok.l;
+    unsigned char* n = s->ctok.value.data;
+    expect(s, tk_name);
+    */
     if( assignment(s) ){
       next(s);
       expression(s);
     } else {
       /* must be a functioncall */
     }
+    /*
+    i = vpushstr(s, n, l);
+    ipush(s, OP_SLOCAL, i);
+    */
   } else if( accept(s, tk_log) ){
     expression(s);
     ipush(s, OP_LOG, 0);
@@ -1187,10 +1196,36 @@ void hl_vrun( hlState_t* s ){
       case OP_PUSHVAL: {
         top(f) = s->vstack[arg];
       } break;
-      case OP_SLOCAL: {
+      case OP_NLOCAL: {
+        int i;
         hlValue_t c = s->vstack[arg];
         hlValue_t v = pop(f);
-        hl_hset(&f->locals, c.v.s->data, c.v.s->l, &v);
+        i = hl_hget(&f->locals, c.v.s->data, c.v.s->l);
+        if( i != -1 ){
+          s->error = 1;
+          fprintf(stderr, "%s already declared\n", c.v.s->data);
+        } else {
+          hl_hset(&f->locals, c.v.s->data, c.v.s->l, &v);
+        }
+      } break;
+      case OP_SLOCAL: {
+        int i;
+        hlFunc_t* state = f;
+        hlValue_t c = s->vstack[arg];
+        hlValue_t v = pop(f);
+        while( state ){
+          i = hl_hget(&state->locals, c.v.s->data, c.v.s->l);
+          if( i == -1 ) {
+            state = state->env;
+          } else {
+            hl_hset(&state->locals, c.v.s->data, c.v.s->l, &v);
+            break;
+          }
+        }
+        if( i == -1 ){
+          s->error = 1;
+          fprintf(stderr, "undeclared variable %s\n", c.v.s->data);
+        }
       } break;
       case OP_GLOCAL: {
         int i;

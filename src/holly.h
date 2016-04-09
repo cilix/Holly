@@ -129,7 +129,7 @@ typedef struct {
   union {
     hlNum_t number;
     unsigned char* data;
-  } data;
+  } value;
 } hlToken_t;
 
 /*

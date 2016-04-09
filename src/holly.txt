@@ -1,12 +1,12 @@
 The Holly Programming Language
 
-types: String, Number, Object, Array, Boolean, Function, Nil
+types: String, Number, Array, Boolean, Function, Nil
 binary operators: | - + * ^ / % >> << & 
 assignment: |= -= += *= ^= /= %= >>= <<= &= =
 unary operator: ! ~ * -
 comparison: < > == != <= >= and or
 reserved symbols: \ { } [ ] : ( ) ; , " ' -- :: .. . ->
-other reserved words: let if else return while fn true false nil for in break
+other reserved words: let if else return while fn true false nil for in break struct use
 
 GRAMMER - BNF
 
@@ -69,9 +69,9 @@ expression ::=
   `(` expression `)` valuesuffix
   
 value ::=
-  object |
   array |
   lambda |
+  Name { expressionlist } |
   Name valuesuffix 
   
 valuesuffix ::=
@@ -125,33 +125,33 @@ forstatement ::=
   
 iterable ::=
   spread |
-  Object |
   Array |
   String
   
 spread ::=
   Number `..` Number  
-
-object ::=
-  `{` pairlist `}`
   
 array ::=
   `[` expressionlist `]`
-  
-pairlist ::=
-  Name `:` expression |
-  Name `:` expression `,` pairlist |
-  nil
 
 functionstatement ::=
   `fn` Name namelist block | 
   `fn` Name namelist `->` expression 
+
+structbody
+  `use` Name structbody |
+  Name structbody |
+  nil
+
+structstatement ::=
+  `struct` Name `{` structbody `}`
   
 statement ::=
   ifstatement |
   whilestatement |
   forstatement |
   `return` expression |
+  structstatement |
   `break` |
   `let` Name [ assignment expression ] |
   functionstatement |                         *sugar for assigning a lambda to a variable
@@ -168,39 +168,14 @@ start ::=
 
 CODE SAMPLES
 
-let Person = fn name, age {
-  return { 
-    name: name,
-    age: age,
-    speak: fn self {
-      print('Hello, my name is ' + self.name)
-    }
-  }
+struct Animal {
+  height
+  speed
+  position
+  isrunning
 }
 
--- or, sugar for functions returning a single expression
-let Person = fn name, age -> 
-  { name: name, age: age, 
-    speak: fn self -> 
-      print('hello, my name is ' + self.name) }
-
-let bob = Person('bob', 25)
-
-bob:speak(bob)
-
-let add = fn x, y -> x + y
-
-let a = add(2, 3)
-
--- parsing a variable from a string (translated from c)
-let name = fn v {
-  let i = 0
-  while isalpha(v[i]) or 
-        isdigit(v[i]) or 
-        v[i] == '_'
-    i += 1
-  if i == 0 return ""
-  return slice(v, i)
+struct Bear {
+  use Animal
+  name
 }
-
-hello.split().(expressthatresturnsfunctionobject):fish()
