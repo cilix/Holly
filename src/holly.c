@@ -317,13 +317,13 @@ typedef enum {
   tk_iseq,   tk_eq,     tk_let,    tk_if,      tk_else,   tk_return, 
   tk_while,  tk_fn,     tk_true,   tk_false,   tk_nil,    tk_for,    
   tk_in,     tk_break,  tk_land,   tk_lor,     tk_str,    tk_num,     
-  tk_array,  tk_bool,   tk_function, tk_Nil,   tk_log, /* temporary */
+  tk_array,  tk_new, tk_bool,   tk_function, tk_Nil,   tk_log, /* temporary */
   tk_struct, tk_use, tk_string,  tk_number, tk_boolean,
   tk_name,   tk_eof
 } token;
 
 static const int tkSymCnt = 42;
-static const int tkCnt = 65;
+static const int tkCnt = 66;
 
 static const char* hlTkns[] = {
   "|=", "-=", "+=", "*=", "^=", "/=", "%=", ">>=",
@@ -333,7 +333,7 @@ static const char* hlTkns[] = {
   "+", "^", "/", "%", ">", "<", "&", "==", "=", "let",
   "if", "else", "return", "while", "fn", "true",
   "false", "nil", "for", "in", "break", "and", "or",
-  "String", "Number", "Array", 
+  "String", "Number", "Array", "new",
   "Boolean", "Function", "Nil", "log", "struct", "use",
   "<string>", "<number>", "<boolean>", "<name>", "<eof>"
 };
@@ -468,7 +468,7 @@ static void next( hlState_t* s ){
   hl_eabort(s);
 check_comments:
   while( hl_isspace(p[s->ptr]) ) s->ptr++; 
-  
+
   /* inline comments start with -- */
   if( hl_ismatch(p + s->ptr, "--", 2) ){
     s->ptr += 2;
@@ -754,11 +754,6 @@ static void value( hlState_t* s ){
     int i, l = s->ctok.l;
     unsigned char* n = s->ctok.value.data;
     expect(s, tk_name);
-    if( accept(s, tk_lbrc) ){
-      expressionlist(s);
-      expect(s, tk_rbrc);
-      return;
-    }
     i = vpushstr(s, n, l);
     ipush(s, OP_GLOCAL, i);
     valuesuffix(s);
@@ -795,6 +790,16 @@ static void expression( hlState_t* s ){
   } else if( accept(s, tk_lp) ){
     expression(s);
     expect(s, tk_rp);
+  } else if( accept(s, tk_new) ){
+    expect(s, tk_name);
+    if( accept(s, tk_lbrc) ){
+      if( accept(s, tk_rbrc) ){
+        return;
+      }
+      expressionlist(s);
+      expect(s, tk_rbrc);
+      return;
+    }
   } else {
     value(s);
   }

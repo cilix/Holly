@@ -7,7 +7,7 @@ log h
 h = h + 1
 h = h + 2
 
-log h /-
+log h 
 h = h + 10
 h = h + 10
 log h
@@ -19,7 +19,7 @@ if h < 13 {
 log h
 
 h = h + 1
--/ /-
+
 log h
 
 while h < 20 {
@@ -47,5 +47,4 @@ fn update self : Animal {
     .applyForce()
 }
 
-let bear = Bear { 20, 40, [1, 4, 9], true }
--/
+let bear = new Bear {}

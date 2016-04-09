@@ -6,7 +6,7 @@ assignment: |= -= += *= ^= /= %= >>= <<= &= =
 unary operator: ! ~ * -
 comparison: < > == != <= >= and or
 reserved symbols: \ { } [ ] : ( ) ; , " ' -- :: .. . ->
-other reserved words: let if else return while fn true false nil for in break struct use
+other reserved words: let if else return while fn true false nil for in break struct use new
 
 GRAMMER - BNF
 
@@ -71,7 +71,7 @@ expression ::=
 value ::=
   array |
   lambda |
-  Name { expressionlist } |
+  `new` Name { expressionlist } |
   Name valuesuffix 
   
 valuesuffix ::=
